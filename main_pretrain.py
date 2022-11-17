@@ -5,8 +5,8 @@ from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning import loggers as pl_loggers
-from ssl_pkg.methods import METHODS
-from ssl_pkg.model_utils.misc_utils import make_contiguous
+from mm_pkg.methods import METHODS
+from mm_pkg.model_utils.misc_utils import make_contiguous
 
 import sys
 sys.path.append("..")
@@ -44,7 +44,7 @@ def parse_args_pretrain():
 
     # pytorchlightning specific args
     parser.add_argument("--seed", type=int, default=2022)
-    parser.add_argument("--num_workers", type=int, default=10)
+    parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--precision", type=int, default=16)
@@ -57,26 +57,28 @@ def parse_args_pretrain():
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_epochs", type=int, default=100)
     parser.add_argument("--features_dim", type=int, default=2048)
-    parser.add_argument("--clip_grad", type=float, default=3.0)
+    parser.add_argument("--clip_grad", type=float, default=0.)
+    parser.add_argument('--pretrained', default=True, type=bool)
 
     # image model
-    parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet3d_tse")
-    parser.add_argument("--two_transform", default=True, type=bool)
+    parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_18")
+    parser.add_argument("--two_transform", default=False, type=bool)
 
     # text model
-    parser.add_argument("--text_backbone", choices=TEXT_BACKBONES, type=str, default="bert-base")
+    parser.add_argument("--text_backbone", choices=TEXT_BACKBONES, type=str, default="microsoft/BiomedVLP-CXR-BERT-general")
     parser.add_argument("--max_length", type=int, default=128)
     parser.add_argument("--pool", type=str, default="cls")
+    parser.add_argument('--full_report', default=True, type=bool)
 
     # learning rate setup
     parser.add_argument("--lr_backbone", type=float, default=1e-4)
     parser.add_argument("--lr_projector", type=float, default=1e-4)
-    parser.add_argument("--lr_predictor", type=float, default=1e-4)
+    #parser.add_argument("--lr_predictor", type=float, default=1e-4)
     parser.add_argument("--min_lr_backbone", type=float, default=1e-5)
     parser.add_argument("--min_lr_projector", type=float, default=1e-5)
 
     # weight decay setup
-    parser.add_argument("--weight_decay", type=float, default=0) # 1e-4
+    parser.add_argument("--weight_decay", type=float, default=1e-4) # 1e-4
     parser.add_argument("--weight_decay_end", type=float, default=1e-5)
 
     # momentum setup
@@ -86,19 +88,14 @@ def parse_args_pretrain():
     parser.add_argument("--momentum", type=float, default=0.90)
 
     # misc
-    parser.add_argument("--per_warmup_steps", type=float, default=0.06)
-    parser.add_argument("--linear_scale_factor", type=float, default=256.)
+    parser.add_argument("--per_warmup_steps", type=float, default=0.03)
     parser.add_argument("--optimizer",  choices=['adamw', 'lamb', 'sgd'], type=str, default="adamw")
 
     # dataset args
-    parser.add_argument("--train_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/oai_mri_TWIST/Metadata/SAG-IW-TSE_unsupervised_train.csv')
-    parser.add_argument("--val_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/oai_mri_TWIST/Metadata/SAG-IW-TSE_unsupervised_val.csv')
+    parser.add_argument("--train_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_half_train.csv')
+    parser.add_argument("--val_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_half_val.csv')
 
     args = parser.parse_args()
-    args.global_crops_scale = (args.min1, args.max1)
-    args.local_crops_scale = (args.min2, args.max2)
-    args.image_size = (args.image_size_d, args.image_size_h, args.image_size_w)
-    args.local_crop_size = (args.local_crop_size_d, args.local_crop_size_h, args.local_crop_size_w)
     return args
 
 
@@ -147,4 +144,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

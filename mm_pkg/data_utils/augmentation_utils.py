@@ -6,7 +6,7 @@ import math
 import h5py
 from scipy import ndimage as nd
 from scipy.ndimage import rotate, shift
-from PIL import ImageOps, ImageFilter
+from PIL import ImageOps, ImageFilter, Image
 import torchvision.transforms as transforms
 from torchvision.transforms import InterpolationMode
 

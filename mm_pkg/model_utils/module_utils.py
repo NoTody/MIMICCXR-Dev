@@ -5,23 +5,16 @@ import warnings
 import torch
 import torch.nn as nn
 import torchvision.models as models
-from transfomers import AutoConfig, AutoTokenizer, AutoModel
+from transformers import AutoConfig, AutoTokenizer, AutoModel
 
 
 warnings.filterwarnings("ignore")
 
 
-def get_embed(model, text, pool, max_length, tokenizer):
-    text_encod = tokenizer.batch_encode_plus(
-        text,
-        max_length=max_length,
-        padding="max_length",
-        truncation=True,
-        add_special_tokens=True,
-        return_tensors="pt"
-        )
-    text_outputs = model(text_encod['input_ids'], text_encod['attention_mask'], return_dict=True)
-    text_hidden_states = text_outputs.hidden_states
+def get_embed(model, text_encodings, pool):
+    #text_outputs = model(text_encodings['input_ids'], text_encodings['attention_mask'], return_dict=True)
+    outputs = model(return_dict=True, **text_encodings)
+    text_hidden_states = outputs.hidden_states
 
     if pool == 'cls':
         text_embed = text_hidden_states[-1][:, 0, :]
@@ -48,29 +41,28 @@ class resnet_model(nn.Module):
         else:
             raise NotImplementedError(f"ResNet with size {size} is not implemented!")
 
+        self.backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         self.feature_dim_in = self.backbone.fc.weight.shape[1]
-        self.fc = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
+        self.backbone.fc = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
 
     def forward(self, x):
         x = self.backbone(x)
-        x = x.flatten()
-        x = self.fc(x)
+        #x = x.flatten()
+        #x = self.fc(x)
         return x
 
 
 # bert model
 class bert_model(nn.Module):
-    def __init__(self, model_name, max_length, pool):
+    def __init__(self, model_name, pool):
         super(bert_model, self).__init__()
-        self.config = AutoConfig.from_pretrained(model_name, max_length, output_hidden_states=True)
-        self.model = AutoModel.from_pretrained(model_name, config=config)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-        self.max_length = max_length
+        self.config = AutoConfig.from_pretrained(model_name, output_hidden_states=True)
+        self.model = AutoModel.from_pretrained(model_name, config=self.config)
         self.pool = pool
 
 
     def forward(self, x):
-        x = get_embed(self.model, x, self.pool, self.max_length, self.tokenizer)
+        x = get_embed(self.model, x, self.pool)
         return x
 
 
@@ -97,4 +89,5 @@ class ProjectionHeadCLIP(nn.Module):
         x = x + projected
         x = self.layer_norm(x)
         return x
+
 

@@ -7,6 +7,29 @@ import torch.distributed as dist
 from torch.optim.lr_scheduler import LambdaLR
 
 
+def all_gather(tensor):
+    return AllGatherFunction.apply(tensor)
+
+
+class AllGatherFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, tensor: torch.Tensor, reduce_dtype: torch.dtype = torch.float32):
+        ctx.reduce_dtype = reduce_dtype
+
+        output = list(torch.empty_like(tensor) for _ in range(dist.get_world_size()))
+        dist.all_gather(output, tensor)
+        output = torch.cat(output, dim=0)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        grad_dtype = grad_output.dtype
+        input_list = list(grad_output.to(ctx.reduce_dtype).chunk(dist.get_world_size()))
+        grad_input = torch.empty_like(input_list[dist.get_rank()])
+        dist.reduce_scatter(grad_input, input_list)
+        return grad_input.to(grad_dtype)
+
+
 def make_contiguous(module):
     """Make the model contigous in order to comply with some distributed strategies.
     https://github.com/lucidrains/DALLE-pytorch/issues/330
@@ -16,10 +39,12 @@ def make_contiguous(module):
         for param in module.parameters():
             param.set_(param.contiguous())
 
+
 def get_rank():
     if dist.is_available() and dist.is_initialized():
         return dist.get_rank()
     return 0
+
 
 class GatherLayer(torch.autograd.Function):
     """
