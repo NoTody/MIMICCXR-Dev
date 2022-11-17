@@ -15,9 +15,10 @@ from ..model_utils.module_utils import *
 from ..model_utils.module_utils import ProjectionHeadCLIP
 from ..data_utils.dataloader_utils import MIMIC_CXR_Unsupervised
 from ..losses.clip_loss import cross_entropy
+from ..losses.vicreg_loss import vicreg_loss
 
 
-class CLIP(pl.LightningModule):
+class SLIP(pl.LightningModule):
 
     def __init__(self, args):
         super().__init__()
@@ -41,19 +42,33 @@ class CLIP(pl.LightningModule):
         self.img_backbone = self.img_backbones[img_backbone]
         self.text_backbone = bert_model(self.hparams.text_backbone, self.hparams.pool)
 
-        self.img_projector = ProjectionHeadCLIP(self.hparams.img_embedding_dim, \
+        # clip projector
+        self.img_projector = ProjectionHeadCLIP(self.hparams.img_embedding_dim, 
                         self.hparams.projection_dim, self.hparams.dropout)
-        self.text_projector = ProjectionHeadCLIP(self.hparams.text_embedding_dim, \
+        self.text_projector = ProjectionHeadCLIP(self.hparams.text_embedding_dim, 
                         self.hparams.projection_dim, self.hparams.dropout)
         self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.text_backbone, use_fast=True)
+
+        # vicreg projector
+        self.vicreg_projector = nn.Sequential(
+            nn.Linear(self.hparams.img_embedding_dim, vicreg_proj_hidden_dim),
+            nn.BatchNorm1d(vicreg_proj_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(vicreg_proj_hidden_dim, vicreg_proj_hidden_dim),
+            nn.BatchNorm1d(vicreg_proj_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(vicreg_proj_hidden_dim, vicreg_proj_output_dim),
+        )
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
         images, text_encodings = batch
-        images = torch.stack((images))
+        # only use first image for clip 
+        images1, images2 = torch.stack((images[0])), torch.stack((images[1]))
 
+        # clip
         # get embeddings
-        image_features, text_features = self.img_backbone(images), self.text_backbone(text_encodings)
+        image_features, text_features = self.img_backbone(images1), self.text_backbone(text_encodings)
         image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
         image_embeddings, text_embeddings = all_gather(image_embeddings), all_gather(text_embeddings)
 
@@ -66,7 +81,16 @@ class CLIP(pl.LightningModule):
         )
         texts_loss = cross_entropy(logits, targets, reduction='none')
         images_loss = cross_entropy(logits.T, targets.T, reduction='none')
-        loss =  (images_loss + texts_loss) / 2.0    # shape: (batch_size)
+        clip_loss =  (images_loss + texts_loss) / 2.0    # shape: (batch_size)
+
+        # vicreg
+        feat1, feat2 = self.backbone(images1), self.backbone(images2)
+        z1, z2 = self.vicreg_projector(feat1), self.vicreg_projector(feat2)
+        vicreg_loss = vicreg_loss(z1, z2, invariance_lamb=self.hparams.invariance_lamb, 
+            variance_mu=self.hparams.variance_mu, covairance_v=self.hparams.covariance_v)
+
+        loss = clip_loss + self.hparams.ssl_scale * vicreg_loss
+
         return {"loss": loss.mean()}
 
 
@@ -96,6 +120,7 @@ class CLIP(pl.LightningModule):
             {"type": "backbone", "params": self.text_backbone.parameters()},
             {"type": "projector", "params": self.img_projector.parameters()},
             {"type": "projector", "params": self.text_projector.parameters()},
+            {"type": "projector", "params": self.vicreg_projector.parameters()},
         ]
 
 
@@ -133,7 +158,7 @@ class CLIP(pl.LightningModule):
                                     try one of adamw or lamb")
         # warmup and scheduler setup
         self.warmup_steps = self.hparams.per_warmup_steps * self.total_steps
-        scheduler = WarmupCosineSchedule(optimizer, self.warmup_steps, self.hparams.max_epochs)
+        scheduler = WarmupCosineSchedule(optimizer, 3, self.hparams.max_epochs)
 
         return [optimizer], [scheduler]
 
@@ -169,12 +194,20 @@ class CLIP(pl.LightningModule):
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("clip")
 
-        # projector
+        # clip projector
         parser.add_argument("--img_embedding_dim", type=int, default=2048)
         parser.add_argument("--text_embedding_dim", type=int, default=768)
         parser.add_argument("--projection_dim", type=int, default=256)
         parser.add_argument("--dropout", type=int, default=0.1)
         parser.add_argument("--temperature", type=float, default=1.0)
+
+        # vicreg projector
+        parser.add_argument("--invariance_lamb", type=float, default=25)
+        parser.add_argument("--variance_mu", type=float, default=25)
+        parser.add_argument("--covariance_v", type=float, default=1.)
+        parser.add_argument("--vicreg_proj_output_dim", type=int, default=2048)
+        parser.add_argument("--vicreg_proj_hidden_dim", type=int, default=8192)
+        parser.add_argument("--ssl_scale", type=float, default=1.0)
 
         return parent_parser
 
