@@ -51,24 +51,27 @@ def parse_args_pretrain():
     parser.add_argument("--save_dir", type=str, default="./")
     parser.add_argument("--val_interval", type=float, default=1.)
     parser.add_argument("--use_ddp", action='store_true')
-    parser.add_argument('--pin_mem', default=True, type=bool)
+    parser.add_argument('--pin_mem', default=False, action='store_true')
 
     # general model args
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_epochs", type=int, default=100)
     parser.add_argument("--features_dim", type=int, default=2048)
     parser.add_argument("--clip_grad", type=float, default=0.)
-    parser.add_argument('--pretrained', default=True, type=bool)
+    parser.add_argument('--pretrained', default=False, action='store_true')
+    #parser.add_argument('--no-pretrained', dest='pretrained', action='store_false')
 
     # image model
     parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_18")
-    parser.add_argument("--two_transform", default=False, type=bool)
+    parser.add_argument("--two_transform", default=False, action='store_true')
+    #parser.add_argument("--no-two_transform", dest='two_transform', action='store_false')
 
     # text model
     parser.add_argument("--text_backbone", choices=TEXT_BACKBONES, type=str, default="microsoft/BiomedVLP-CXR-BERT-general")
     parser.add_argument("--max_length", type=int, default=128)
     parser.add_argument("--pool", type=str, default="cls")
-    parser.add_argument('--full_report', default=True, type=bool)
+    parser.add_argument('--full_report', default=False, action='store_true')
+    #parser.add_argument('--no-full_report', dest='full_report', action='store_false')
 
     # learning rate setup
     parser.add_argument("--lr_backbone", type=float, default=1e-4)
@@ -118,7 +121,7 @@ def main():
     )
 
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=args.save_dir)
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
     bar = TQDMProgressBar(refresh_rate=5, process_position=0)
 
     callbacks = [checkpoint_callback, early_stop_callback, bar]
@@ -134,9 +137,10 @@ def main():
         val_check_interval=args.val_interval,
         logger=tb_logger,
         callbacks=callbacks,
-        strategy=DDPStrategy(find_unused_parameters=False)
-        if args.use_ddp
-        else None,
+        strategy="ddp",
+        #strategy=DDPStrategy(find_unused_parameters=True)
+        #if args.use_ddp
+        #else None,
     )
 
     trainer.fit(model)

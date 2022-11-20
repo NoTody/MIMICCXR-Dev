@@ -41,7 +41,7 @@ class resnet_model(nn.Module):
         else:
             raise NotImplementedError(f"ResNet with size {size} is not implemented!")
 
-        self.backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        #self.backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         self.feature_dim_in = self.backbone.fc.weight.shape[1]
         self.backbone.fc = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
 

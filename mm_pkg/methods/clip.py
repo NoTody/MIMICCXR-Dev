@@ -14,7 +14,7 @@ from ..model_utils.misc_utils import WarmupCosineSchedule
 from ..model_utils.module_utils import *
 from ..model_utils.module_utils import ProjectionHeadCLIP
 from ..data_utils.dataloader_utils import MIMIC_CXR_Unsupervised
-from ..losses.clip_loss import cross_entropy
+from ..losses.clip_loss import clip_loss
 
 
 class CLIP(pl.LightningModule):
@@ -58,16 +58,8 @@ class CLIP(pl.LightningModule):
         image_embeddings, text_embeddings = all_gather(image_embeddings), all_gather(text_embeddings)
 
         # compute loss
-        logits = (text_embeddings @ image_embeddings.T) / self.hparams.temperature
-        images_similarity = image_embeddings @ image_embeddings.T
-        texts_similarity = text_embeddings @ text_embeddings.T
-        targets = F.softmax(
-            (images_similarity + texts_similarity) / 2.0 * self.hparams.temperature, dim=-1
-        )
-        texts_loss = cross_entropy(logits, targets, reduction='none')
-        images_loss = cross_entropy(logits.T, targets.T, reduction='none')
-        loss =  (images_loss + texts_loss) / 2.0    # shape: (batch_size)
-        return {"loss": loss.mean()}
+        loss = clip_loss(image_embeddings, text_embeddings, self.hparams.temperature).mean()
+        return {"loss": loss}
 
 
     def training_step(self, batch, batch_idx):
@@ -105,12 +97,14 @@ class CLIP(pl.LightningModule):
         with open(mimic_cxr_path / 'mimic_cxr_imgs.pkl', 'rb') as handle:
             dict_image_mapping = dict(pickle.load(handle))
         print("Trainset Loading ...")
-        self.ds_train = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, \
-                full_report=self.hparams.full_report, data_df_path=self.hparams.train_df_path, train=True)
+        self.ds_train = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, 
+                two_transform=self.hparams.two_transform, full_report=self.hparams.full_report, 
+                data_df_path=self.hparams.train_df_path, train=True)
 
         print("Valset Loading ...")
-        self.ds_val = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, \
-                full_report=self.hparams.full_report, data_df_path=self.hparams.val_df_path, train=False)
+        self.ds_val = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, 
+                two_transform=self.hparams.two_transform, full_report=self.hparams.full_report, 
+                data_df_path=self.hparams.val_df_path, train=False)
 
         # Calculate total steps
         tb_size = self.hparams.batch_size * max(1, self.trainer.num_devices)
@@ -132,8 +126,8 @@ class CLIP(pl.LightningModule):
             raise NotImplementedError(f"This {self.args.optimizer} optimizer is not implemented yet, \
                                     try one of adamw or lamb")
         # warmup and scheduler setup
-        self.warmup_steps = self.hparams.per_warmup_steps * self.total_steps
-        scheduler = WarmupCosineSchedule(optimizer, self.warmup_steps, self.hparams.max_epochs)
+        #self.warmup_steps = self.hparams.per_warmup_steps * self.total_steps
+        scheduler = WarmupCosineSchedule(optimizer, 0, self.hparams.max_epochs)
 
         return [optimizer], [scheduler]
 
@@ -177,4 +171,5 @@ class CLIP(pl.LightningModule):
         parser.add_argument("--temperature", type=float, default=1.0)
 
         return parent_parser
+
 

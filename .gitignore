@@ -135,4 +135,10 @@ dmypy.json
 **/*.err
 **/*.out
 
+/chexpert_evaluation/model_saved
 /clip_saved
+/slip_saved
+/simclr_saved
+/vicreg_saved
+**/*.pth.tar
+

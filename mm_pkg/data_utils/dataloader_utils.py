@@ -33,21 +33,25 @@ class MIMIC_CXR_Unsupervised(Dataset):
         image_path = self.data_df.iloc[index]['dicom_path']
         image = self.dict_image_mapping[image_path]
         # to PIL images
-        PIL_image = Image.fromarray(image, 'L')
+        PIL_image = Image.fromarray(image).convert("RGB")
+
         # texts
         impression = self.data_df.iloc[index]['impression']
         findings = self.data_df.iloc[index]['findings']
 
         # if not using full report, only impression is used
-        if self.full_report:
-            if isinstance(findings, str):
-                text = impression + findings
-            else:
-                text = impression
+        if self.full_report and isinstance(findings, str):
+            text = impression + findings
+        else:
+            text = impression
 
         transform = TrainTransform(self.two_transform)
         images = transform(PIL_image)
-        return images[0], text
+        #print(f"len(images): {len(images)}\nimages: {images}")
+        if self.two_transform:
+            return images[0], images[1], text
+        else:
+            return images, text
 
 
     def __len__(self):
