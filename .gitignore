@@ -135,6 +135,7 @@ dmypy.json
 **/*.err
 **/*.out
 
+**/*.ipynb
 /chexpert_evaluation/model_saved
 /clip_saved
 /slip_saved

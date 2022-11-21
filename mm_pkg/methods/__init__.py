@@ -1,3 +1,4 @@
+from ..methods.base import BASE
 from ..methods.clip import CLIP
 from ..methods.vicreg import VICREG
 from ..methods.simclr import SIMCLR
@@ -8,6 +9,7 @@ from ..methods.slip_simclr import SLIP_SIMCLR
 
 METHODS = {
     # methods
+    "BASE": BASE,
     "CLIP": CLIP,
     "SLIP_VICREG": SLIP_VICREG,
     "SLIP_SIMCLR": SLIP_SIMCLR,
@@ -16,6 +18,7 @@ METHODS = {
     "SIMCLR": SIMCLR,
 }
 __all__ = [
+    "BASE",
     "CLIP",
     "SLIP_VICREG",
     "SLIP_SIMCLR",

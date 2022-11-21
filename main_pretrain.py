@@ -15,6 +15,7 @@ IMG_BACKBONES = {
     "resnet2d_18",
     "resnet2d_50",
     "resnet2d_101",
+    "densenet2d_121",
 }
 
 TEXT_BACKBONES = {
@@ -92,7 +93,7 @@ def parse_args_pretrain():
 
     # misc
     parser.add_argument("--per_warmup_steps", type=float, default=0.03)
-    parser.add_argument("--optimizer",  choices=['adamw', 'lamb', 'sgd'], type=str, default="adamw")
+    parser.add_argument("--optimizer",  choices=['adamw', 'lamb', 'sgd', 'lars'], type=str, default="adamw")
 
     # dataset args
     parser.add_argument("--train_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_half_train.csv')
@@ -138,6 +139,7 @@ def main():
         logger=tb_logger,
         callbacks=callbacks,
         strategy="ddp",
+        sync_batchnorm=True
         #strategy=DDPStrategy(find_unused_parameters=True)
         #if args.use_ddp
         #else None,

@@ -12,7 +12,7 @@ def variance_loss(z1, z2):
     eps = 1e-4
     std_z1 = torch.sqrt(z1.var(dim=0) + eps)
     std_z2 = torch.sqrt(z2.var(dim=0) + eps)
-    std_loss = torch.mean(F.relu(1 - std_z1)) + torch.mean(F.relu(1 - std_z2))
+    std_loss = torch.mean(F.relu(1 - std_z1)) + torch.mean(F.relu(1 - std_z2)) / 2
     return std_loss
 
 
@@ -39,4 +39,5 @@ def vicreg_loss(z1, z2, invariance_lamb, variance_mu, covairance_v):
     loss = invariance_lamb * invar_loss + variance_mu * var_loss + covairance_v * cov_loss
 
     return loss
+
 

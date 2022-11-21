@@ -52,6 +52,22 @@ class resnet_model(nn.Module):
         return x
 
 
+# densenet model
+class densenet_model(nn.Module):
+    def __init__(self, size, features_dim, pretrained=False):
+        super(densenet_model, self).__init__()
+
+        if size == 121:
+            self.backbone = models.densenet121(pretrained=pretrained)
+
+        self.feature_dim_in = self.backbone.classifier.weight.shape[1]
+        self.backbone.classifier = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
+        
+    def forward(self, x):
+        x = self.backbone(x)
+        return x
+
+
 # bert model
 class bert_model(nn.Module):
     def __init__(self, model_name, pool):

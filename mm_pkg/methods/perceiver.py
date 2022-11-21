@@ -13,27 +13,12 @@ from ..model_utils.module_utils import *
 from ..data_utils.dataloader_utils import OaiDataSet_Unsupervised
 
 
-class CLIP(pl.LightningModule):
+class CLIP(BASE):
 
     def __init__(self, args):
-        super().__init__()
+        super().__init__(args)
 
-        # get args
-        self.args = args
-        self.hparams.update(vars(args))
-
-        # get backbone
-        self.img_backbones = {
-            "resnet3d_18": resnet_model(size=18, features_dim=self.hparams.features_dim),
-            "resnet2d_50": resnet_model(size=50, features_dim=self.hparams.features_dim),
-            "resnet3d_101": resnet_model(size=101, features_dim=self.hparams.features_dim),
-            "resnet3d_tse": resnet_model(size="TSE", features_dim=self.hparams.features_dim),
-        }
-
-        self.text_backbones = {
-            "bert_base": bert_model(self.hparams.text_backbone, self.hparams.max_length, self.hparams.pool),
-        }
-
+        # Build Models
         self._build_model(self.hparams.img_backbone, self.hparams.text_backbone, 
             self.hparams.embedding_dim, self.hparams.projection_dim, self.hparams.dropout)
 
@@ -92,13 +77,7 @@ class CLIP(pl.LightningModule):
         #    return {"val_loss": loss, "outs": outs, "multicrop_outs": shared_out["multicrop_outs"]}
         #else:
         #    return {"val_loss": loss, "outs": outs}
-
-
-    def on_after_backward(self):
-        # clip gradients
-        if self.hparams.clip_grad:
-            clip_gradients(self.backbone, self.hparams.clip_grad)
-
+    
 
     @property
     def learnable_params(self):
@@ -108,74 +87,6 @@ class CLIP(pl.LightningModule):
             {"type": "projector", "params": self.img_projector.parameters()},
             {"type": "projector", "params": self.text_projector.parameters()},
         ]
-
-
-    def setup(self, stage=None):
-        print("Trainset Loading ...")
-        self.ds_train = OaiDataSet_Unsupervised(args=self.args, data_df_path=self.hparams.train_df_path, train=True)
-
-        print("Valset Loading ...")
-        #self.ds_val = self.ds_train
-        self.ds_val = OaiDataSet_Unsupervised(args=self.args, data_df_path=self.hparams.val_df_path, train=False)
-
-        # Calculate total steps
-        tb_size = self.hparams.batch_size * max(1, self.trainer.num_devices)
-        ab_size = self.trainer.accumulate_grad_batches * float(self.trainer.max_epochs)
-        self.total_steps = (len(self.ds_train.data_df) // tb_size) * ab_size
-        print(f"total steps: {self.total_steps}")
-
-
-    def configure_optimizers(self):
-        learnable_params = self.learnable_params
-
-        if self.hparams.optimizer == "adamw":
-            optimizer = AdamW(learnable_params, lr=self.hparams.lr_backbone, weight_decay=self.hparams.weight_decay)
-        elif self.hparams.optimizer == "lamb":
-            optimizer = optim.Lamb(learnable_params, lr=self.hparams.lr_backbone, weight_decay=self.hparams.weight_decay)
-        elif self.hparams.optimizer == "sgd":
-            optimizer = SGD(learnable_params, lr=self.hparams.lr_backbone, weight_decay=self.hparams.weight_decay, momentum=self.hparams.momentum)
-        else:
-            raise NotImplementedError(f"This {self.args.optimizer} optimizer is not implemented yet,\
-                                    try one of adamw or lamb")
-
-        self.warmup_steps = (int)(self.hparams.per_warmup_steps * self.total_steps)
-
-        #if self.hparams.method != "vicreg" and self.hparams.method != "barlowtwins": 
-        lr_schedule_backbone = cosine_scheduler(
-            self.hparams.lr_backbone * self.trainer.num_devices / self.hparams.linear_scale_factor,  # linear scaling rule
-            self.hparams.min_lr_backbone,
-            self.total_steps,
-            self.warmup_steps,
-        )
-       
-        lr_schedule_projector = cosine_scheduler(
-            self.hparams.lr_projector * self.trainer.num_devices / self.hparams.linear_scale_factor,  # linear scaling rule
-            self.hparams.min_lr_projector,
-            self.total_steps,
-            self.warmup_steps,
-        )
-       
-        self.lr_schedule = {"backbone": lr_schedule_backbone, "projector": lr_schedule_projector}
-       
-        self.wd_schedule = cosine_scheduler(
-            self.hparams.weight_decay,
-            self.hparams.weight_decay_end,
-            self.total_steps,
-        )
-        
-        # momentum scheduling, set warmup step to 0
-        self.momentum_schedule = cosine_scheduler(
-            self.hparams.start_momentum,
-            self.hparams.end_momentum,
-            self.total_steps,
-            0,
-        )
-
-        #warmup_steps = 100
-        #scheduler = WarmupCosineSchedule(optimizer, warmup_steps, self.hparams.max_epochs)
-
-        return [optimizer]
-#, [scheduler]
 
 
     def train_dataloader(self):

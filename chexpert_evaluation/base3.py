@@ -64,9 +64,12 @@ class_names = ['No Finding', 'Enlarged Cardiomediastinum', 'Cardiomegaly', 'Lung
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_load_path", type=str, default="None")
-    parser.add_argument("--model_name", type=str, choices=["resnet50", "densenet101"] , default="resnet50")
+    parser.add_argument("--model_name", type=str, choices=["resnet50", "densenet121"] , default="resnet50")
     parser.add_argument("--save_suffix", type=str, default="")
     parser.add_argument("--seed", type=int, default=2022)
+    parser.add_argument("--linear_prob", default=False, action='store_true')
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--max_epoch", type=int, default=3)
     args = parser.parse_args()
     return args
 
@@ -126,34 +129,6 @@ class CheXpertDataSet(Dataset):
     def __len__(self):
         return len(self.image_names)
     
-
-IMAGENET_MEAN = [0.485, 0.456, 0.406]  # mean of ImageNet dataset(for normalization)
-IMAGENET_STD = [0.229, 0.224, 0.225]   # std of ImageNet dataset(for normalization)
-
-# Tranform data
-normalize = transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
-transformList = []
-
-transformList.append(transforms.Resize((imgtransCrop, imgtransCrop))) # 224
-# transformList.append(transforms.RandomResizedCrop(imgtransCrop))
-# transformList.append(transforms.RandomHorizontalFlip())
-transformList.append(transforms.ToTensor())
-# transformList.append(normalize)
-transformSequence = transforms.Compose(transformList)
-
-# Load dataset
-datasetTrain = CheXpertDataSet(pathFileTrain, transformSequence, policy = "ones")
-print("Train data length:", len(datasetTrain))
-dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, shuffle=True,  num_workers=20, pin_memory=True)
-
-
-datasetValid = CheXpertDataSet(pathFileValid, transformSequence)
-print("Valid data length:", len(datasetValid))
-dataLoaderVal = DataLoader(dataset = datasetValid, batch_size = trBatchSize, 
-                           shuffle = False, num_workers = 2, pin_memory = True)
-
-# data("Test data length:", len(datasetTest))
-
 
 class CheXpertTrainer():
 
@@ -264,27 +239,34 @@ class CheXpertTrainer():
         return outGT, outPRED
     
     
-class DenseNet121(nn.Module):
+class densenet_model(nn.Module):
     """Model modified.
     The architecture of our model is the same as standard DenseNet121
     except the classifier layer which has an additional sigmoid function.
     """
-    def __init__(self, out_size):
-        super(DenseNet121, self).__init__()
-        self.densenet121 = torchvision.models.densenet121(pretrained = False)
-        num_ftrs = self.densenet121.classifier.in_features
-        self.densenet121.classifier = nn.Sequential(
-            nn.Linear(num_ftrs, out_size),
+    def __init__(self, size, features_dim, out_size, pretrained=True):
+        super(densenet_model, self).__init__()
+        
+        if size == 121:
+            self.backbone = torchvision.models.densenet121(pretrained=pretrained)
+
+        self.feature_dim_in = self.backbone.classifier.weight.shape[1]
+        self.backbone.classifier = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
+        self.classifier = nn.Sequential(
+            nn.Linear(features_dim, out_size),
             nn.Sigmoid()
         )
 
+
     def forward(self, x):
-        x = self.densenet121(x)
+        x = self.backbone(x)
+        x = self.classifier(x)
         return x
+
 
 # resnet model
 class resnet_model(nn.Module):
-    def __init__(self, size, features_dim, out_size, pretrained=False):
+    def __init__(self, size, features_dim, out_size, pretrained=True):
         super(resnet_model, self).__init__()
         
         if size==18:
@@ -322,8 +304,45 @@ if __name__ == "__main__":
         np.random.seed(random_seed)
         random.seed(random_seed)
 
+    IMAGENET_MEAN = [0.485, 0.456, 0.406]  # mean of ImageNet dataset(for normalization)
+    IMAGENET_STD = [0.229, 0.224, 0.225]   # std of ImageNet dataset(for normalization)
+
+    # Training settings: batch size, maximum number of epochs
+    trBatchSize = args.batch_size 
+    trMaxEpoch = args.max_epoch
+
+    # Tranform data
+    normalize = transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
+    transformList = []
+
+    transformList.append(transforms.Resize((imgtransCrop, imgtransCrop))) # 224
+    # transformList.append(transforms.RandomResizedCrop(imgtransCrop))
+    # transformList.append(transforms.RandomHorizontalFlip())
+    transformList.append(transforms.ToTensor())
+    # transformList.append(normalize)
+    transformSequence = transforms.Compose(transformList)
+
+    # Load dataset
+    datasetTrain = CheXpertDataSet(pathFileTrain, transformSequence, policy = "ones")
+    print("Train data length:", len(datasetTrain))
+    dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, 
+                            shuffle=True,  num_workers=20, pin_memory=True)
+
+    datasetValid = CheXpertDataSet(pathFileValid, transformSequence)
+    print("Valid data length:", len(datasetValid))
+    dataLoaderVal = DataLoader(dataset=datasetValid, batch_size=trBatchSize, 
+                            shuffle=False, num_workers=2, pin_memory=True)
+
+
     if args.model_name == "densenet121":
-        model = DenseNet121(nnClassCount).cuda()
+        size = 121 
+        features_dim = 2048
+        out_size = nnClassCount
+        model = densenet_model(size, features_dim, out_size, pretrained=True).cuda() # Step 0: Initialize global model and load the model
+        if args.linear_prob:
+            for param in model.parameters():
+                param.requires_grad = False
+
     elif args.model_name == "resnet50":
         size = 50
         features_dim = 2048
@@ -332,12 +351,19 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError("Model Not Implemented!")
 
+    # check if freeze the backbone model
+    if args.linear_prob:
+        for param in model.backbone.parameters():
+            param.requires_grad = False
+    
     model = torch.nn.DataParallel(model).cuda()
 
     if args.model_load_path != "None":
         checkpoint = torch.load(args.model_load_path)
         state_dict = {k.replace("img_backbone.", "module."): v for k, v in checkpoint['state_dict'].items()}
-        model.load_state_dict(state_dict, strict=False)
+        #print(state_dict.keys())
+        load_status = model.load_state_dict(state_dict, strict=False)
+        print(f"Load Status: {load_status}")
 
     #batch, losst, losse = 
     CheXpertTrainer.train(model, dataLoaderTrain, dataLoaderVal, nnClassCount, trMaxEpoch, checkpoint = None, save_suffix = args.save_suffix)
