@@ -139,4 +139,4 @@ dmypy.json
 /chexpert_evaluation/model_saved
 **/*_saved
 **/*.pth.tar
-
+**/*.csv
