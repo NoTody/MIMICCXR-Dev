@@ -91,15 +91,13 @@ class SLIP_SIMCLR(BASE):
     # collate_fn for tokenizing input
     def collate_fn_batch_encoding(self, batch):
         images1, images2, texts = zip(*batch)
-
         text_encodings = self.tokenizer.batch_encode_plus(
-                list(texts),
-                max_length=self.hparams.max_length,
-                padding="max_length",
-                truncation=True,
-                add_special_tokens=True,
-                return_tensors="pt")
-
+                        list(texts),
+                        max_length=self.hparams.max_length,
+                        padding="max_length",
+                        truncation=True,
+                        add_special_tokens=True,
+                        return_tensors="pt")
         return images1, images2, text_encodings
 
 
@@ -122,7 +120,7 @@ class SLIP_SIMCLR(BASE):
         # clip projector
         parser.add_argument("--img_embedding_dim", type=int, default=2048)
         parser.add_argument("--text_embedding_dim", type=int, default=768)
-        parser.add_argument("--projection_dim", type=int, default=256)
+        parser.add_argument("--projection_dim", type=int, default=512)
         parser.add_argument("--dropout", type=int, default=0.1)
         parser.add_argument("--temperature", type=float, default=0.1)
 

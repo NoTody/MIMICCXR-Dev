@@ -122,7 +122,7 @@ class SLIP_VICREG(BASE):
         # clip projector
         parser.add_argument("--img_embedding_dim", type=int, default=2048)
         parser.add_argument("--text_embedding_dim", type=int, default=768)
-        parser.add_argument("--projection_dim", type=int, default=256)
+        parser.add_argument("--projection_dim", type=int, default=512)
         parser.add_argument("--dropout", type=int, default=0.1)
         parser.add_argument("--temperature", type=float, default=0.1)
 

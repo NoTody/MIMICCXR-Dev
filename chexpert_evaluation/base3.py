@@ -17,6 +17,12 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import random_split
+from torchvision.ops import sigmoid_focal_loss
+from torch.utils.data import SubsetRandomSampler
+
+from timm.models.vision_transformer import _create_vision_transformer
+from timm.models.layers import PatchEmbed
+from timm.models.vision_transformer import VisionTransformer, _cfg
 
 import sklearn.metrics as metrics
 from sklearn.metrics import roc_auc_score
@@ -24,11 +30,8 @@ from sklearn.metrics import roc_auc_score
 use_gpu = torch.cuda.is_available()
 print(use_gpu)
 
-
-
 train_path = '/gpfs/data/denizlab/Datasets/Public/CheXpert-v1.0/train.csv'
 valid_path = '/gpfs/data/denizlab/Datasets/Public/CheXpert-v1.0/valid.csv'
-
 
 Traindata = pd.read_csv(train_path)
 Traindata = Traindata[Traindata['Path'].str.contains("frontal")] # use only frontal images
@@ -64,12 +67,13 @@ class_names = ['No Finding', 'Enlarged Cardiomediastinum', 'Cardiomegaly', 'Lung
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_load_path", type=str, default="None")
-    parser.add_argument("--model_name", type=str, choices=["resnet50", "densenet121"] , default="resnet50")
+    parser.add_argument("--model_name", type=str, choices=["resnet50", "densenet121", "vitb16"] , default="resnet50")
     parser.add_argument("--save_suffix", type=str, default="")
     parser.add_argument("--seed", type=int, default=2022)
     parser.add_argument("--linear_prob", default=False, action='store_true')
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--max_epoch", type=int, default=3)
+    parser.add_argument("--train_percent", type=float, default=0.01)
     args = parser.parse_args()
     return args
 
@@ -176,6 +180,7 @@ class CheXpertTrainer():
             
             varTarget = target.cuda(non_blocking = True)
             varOutput = model(varInput)
+            #lossvalue = sigmoid_focal_loss(varOutput, varTarget, alpha=0.25, gamma=2, reduction="mean")
             lossvalue = loss(varOutput, varTarget)
             optimizer.zero_grad()
             lossvalue.backward()
@@ -251,12 +256,12 @@ class densenet_model(nn.Module):
             self.backbone = torchvision.models.densenet121(pretrained=pretrained)
 
         self.feature_dim_in = self.backbone.classifier.weight.shape[1]
-        self.backbone.classifier = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
+        #self.backbone.classifier = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
+        self.backbone.classifier = nn.Identity()
         self.classifier = nn.Sequential(
-            nn.Linear(features_dim, out_size),
+            nn.Linear(self.feature_dim_in, out_size),
             nn.Sigmoid()
         )
-
 
     def forward(self, x):
         x = self.backbone(x)
@@ -279,13 +284,41 @@ class resnet_model(nn.Module):
             raise NotImplementedError(f"ResNet with size {size} is not implemented!")
 
         self.feature_dim_in = self.backbone.fc.weight.shape[1]
-        self.backbone.fc = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
+        #self.backbone.fc = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
+        self.backbone.fc = nn.Identity()
         self.classifier = nn.Sequential(
-            nn.Linear(features_dim, out_size),
+            nn.Linear(self.feature_dim_in, out_size),
             nn.Sigmoid()
         )
         
     def forward(self, x):
+        x = self.backbone(x)
+        x = self.classifier(x)
+        return x
+
+
+# vit model
+class vit_model(nn.Module):
+     def __init__(self, size, features_dim, out_size, pretrained=False, freeze_pos_embed=False, **kwargs):
+        super(vit_model, self).__init__()
+
+        if freeze_pos_embed:
+            pass
+        else:
+            if size=="base":
+                model_kwargs = dict(
+                    patch_size=16, embed_dim=768, depth=12, num_heads=12, num_classes=0, **kwargs
+                )
+                self.backbone = _create_vision_transformer("vit_base_patch16_224", pretrained=pretrained, **model_kwargs)
+            else:
+                pass
+        
+        self.classifier = nn.Sequential(
+                nn.Linear(features_dim, out_size),
+                nn.Sigmoid()
+        )
+
+     def forward(self, x):
         x = self.backbone(x)
         x = self.classifier(x)
         return x
@@ -325,13 +358,17 @@ if __name__ == "__main__":
     # Load dataset
     datasetTrain = CheXpertDataSet(pathFileTrain, transformSequence, policy = "ones")
     print("Train data length:", len(datasetTrain))
+    train_size = (int)(len(datasetTrain) * args.train_percent)
+    train_idx = torch.randperm(len(datasetTrain))[:train_size]
+    train_sampler = SubsetRandomSampler(train_idx)
     dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, 
-                            shuffle=True,  num_workers=20, pin_memory=True)
+                            shuffle=False,  num_workers=20, pin_memory=True,
+                            sampler=train_sampler)
 
     datasetValid = CheXpertDataSet(pathFileValid, transformSequence)
     print("Valid data length:", len(datasetValid))
     dataLoaderVal = DataLoader(dataset=datasetValid, batch_size=trBatchSize, 
-                            shuffle=False, num_workers=2, pin_memory=True)
+                            shuffle=False, num_workers=20, pin_memory=True)
 
 
     if args.model_name == "densenet121":
@@ -339,15 +376,16 @@ if __name__ == "__main__":
         features_dim = 2048
         out_size = nnClassCount
         model = densenet_model(size, features_dim, out_size, pretrained=True).cuda() # Step 0: Initialize global model and load the model
-        if args.linear_prob:
-            for param in model.parameters():
-                param.requires_grad = False
-
     elif args.model_name == "resnet50":
         size = 50
         features_dim = 2048
         out_size = nnClassCount
         model = resnet_model(size, features_dim, out_size, pretrained=True).cuda() # Step 0: Initialize global model and load the model
+    elif args.model_name == "vitb16":
+        size = "base" 
+        features_dim = 768
+        out_size = nnClassCount
+        model = vit_model(size, features_dim, out_size, pretrained=True).cuda() # Step 0: Initialize global model and load the model
     else:
         raise NotImplementedError("Model Not Implemented!")
 

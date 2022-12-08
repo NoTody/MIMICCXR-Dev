@@ -84,7 +84,7 @@ class VICREG(BASE):
 
     @staticmethod
     def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("slip_vicreg")
+        parser = parent_parser.add_argument_group("vicreg")
 
         parser.add_argument("--img_embedding_dim", type=int, default=2048)
         parser.add_argument("--dropout", type=int, default=0.1)

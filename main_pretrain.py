@@ -16,6 +16,7 @@ IMG_BACKBONES = {
     "resnet2d_50",
     "resnet2d_101",
     "densenet2d_121",
+    "vit2d_b16",
 }
 
 TEXT_BACKBONES = {
@@ -63,8 +64,10 @@ def parse_args_pretrain():
     #parser.add_argument('--no-pretrained', dest='pretrained', action='store_false')
 
     # image model
-    parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_18")
+    parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_50")
     parser.add_argument("--two_transform", default=False, action='store_true')
+    # whether freeze position embedding layer proposed by mocov3 in VIT
+    parser.add_argument("--freeze_pos_embed", default=False, action='store_true')
     #parser.add_argument("--no-two_transform", dest='two_transform', action='store_false')
 
     # text model
@@ -96,8 +99,8 @@ def parse_args_pretrain():
     parser.add_argument("--optimizer",  choices=['adamw', 'lamb', 'sgd', 'lars'], type=str, default="adamw")
 
     # dataset args
-    parser.add_argument("--train_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_half_train.csv')
-    parser.add_argument("--val_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_half_val.csv')
+    parser.add_argument("--train_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_full_train.csv')
+    parser.add_argument("--val_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_full_val.csv')
 
     args = parser.parse_args()
     return args

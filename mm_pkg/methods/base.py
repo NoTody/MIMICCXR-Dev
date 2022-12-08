@@ -31,6 +31,7 @@ class BASE(pl.LightningModule):
             "resnet2d_50": resnet_model(size=50, features_dim=self.hparams.features_dim, pretrained=self.hparams.pretrained),
             "resnet2d_101": resnet_model(size=101, features_dim=self.hparams.features_dim, pretrained=self.hparams.pretrained),
             "densenet2d_121": densenet_model(size=121, features_dim=self.hparams.features_dim, pretrained=self.hparams.pretrained),
+            "vit2d_b16": vit_model("base", self.hparams.pretrained, self.hparams.freeze_pos_embed)
         }
 
 
@@ -61,29 +62,22 @@ class BASE(pl.LightningModule):
 
     @property
     def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "backbone", "params": self.text_backbone.parameters()},
-            {"type": "projector", "params": self.img_projector.parameters()},
-            {"type": "projector", "params": self.text_projector.parameters()},
-        ]
+        return dict()
 
 
     def setup(self, stage=None):
         mimic_cxr_path = Path('/gpfs/data/denizlab/Datasets/Public/physionet.org/files/mimic-cxr/2.0.0')
         # load all resized image mapping
-        with open(mimic_cxr_path / 'mimic_cxr_imgs.pkl', 'rb') as handle:
+        with open(mimic_cxr_path / 'mimic_cxr_imgs_v3.pkl', 'rb') as handle:
             dict_image_mapping = dict(pickle.load(handle))
         print("Trainset Loading ...")
         self.ds_train = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, 
                 two_transform=self.hparams.two_transform, full_report=self.hparams.full_report, 
                 data_df_path=self.hparams.train_df_path, train=True)
-
         print("Valset Loading ...")
         self.ds_val = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, 
                 two_transform=self.hparams.two_transform, full_report=self.hparams.full_report, 
                 data_df_path=self.hparams.val_df_path, train=False)
-
         # Calculate total steps
         tb_size = self.hparams.batch_size * max(1, self.trainer.num_devices)
         ab_size = self.trainer.accumulate_grad_batches * float(self.trainer.max_epochs)
@@ -95,7 +89,7 @@ class BASE(pl.LightningModule):
         learnable_params = self.learnable_params
 
         if self.hparams.optimizer == "adamw":
-            optimizer = AdamW(learnable_params, betas=(0.9, 0.98), lr=self.hparams.lr_backbone, weight_decay=self.hparams.weight_decay)
+            optimizer = AdamW(learnable_params, lr=self.hparams.lr_backbone, weight_decay=self.hparams.weight_decay)
         elif self.hparams.optimizer == "lamb":
             optimizer = optim.Lamb(learnable_params, lr=self.hparams.lr_backbone, weight_decay=self.hparams.weight_decay)
         elif self.hparams.optimizer == "sgd":
@@ -111,6 +105,7 @@ class BASE(pl.LightningModule):
         scheduler = WarmupCosineSchedule(optimizer, 0, self.hparams.max_epochs)
 
         return [optimizer], [scheduler]
+
 
     def collate_fn_batch_encoding(self, batch):
         images, texts = zip(*batch)
