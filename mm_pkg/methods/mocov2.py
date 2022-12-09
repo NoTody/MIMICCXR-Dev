@@ -1,6 +1,7 @@
 from ..methods.base import *
 from ..methods.base import BASE
 from ..losses.mocov2_loss import mocov2_loss
+from ..model_utils.misc_utils import _batch_shuffle_ddp, _batch_unshuffle_ddp
 from copy import deepcopy
 
 class MOCOV2(BASE):
@@ -66,10 +67,20 @@ class MOCOV2(BASE):
         # original encoder output
         feat1, feat2 = self.img_backbone(images1), self.img_backbone(images2)
         q1, q2 = self.mocov2_projector(feat1), self.mocov2_projector(feat2)
+        # normalize
+        q1, q2 = nn.functional.normalize(q1, dim=1), nn.functional.normalize(q1, dim=1)
 
-        # ema encoder output
-        feat1_ema, feat2_ema = self.img_backbone_ema(images1), self.img_backbone_ema(images2)
-        k1, k2 = self.mocov2_projector_ema(feat1), self.mocov2_projector_ema(feat2)
+        with torch.no_grad():
+            # shuffle for making use of BN
+            images1_k, idx_unshuffle1 = _batch_shuffle_ddp(images1)
+            images2_k, idx_unshuffle2 = _batch_shuffle_ddp(images2)
+            # ema encoder output
+            feat1_ema, feat2_ema = self.img_backbone_ema(images1), self.img_backbone_ema(images2)
+            k1, k2 = self.mocov2_projector_ema(feat1_ema), self.mocov2_projector_ema(feat2_ema)
+            # normalize
+            k1, k2 = nn.functional.normalize(k1, dim=1), nn.functional.normalize(k2, dim=1)
+            # undo shuffle
+            k1, k2 = _batch_unshuffle_ddp(k1, idx_unshuffle1), _batch_unshuffle_ddp(k2, idx_unshuffle2)
 
         # loss
         queue = self.queue.clone().detach()

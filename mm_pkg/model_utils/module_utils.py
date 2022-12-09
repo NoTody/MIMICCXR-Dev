@@ -121,7 +121,7 @@ class densenet_model(nn.Module):
 
         self.feature_dim_in = self.backbone.classifier.weight.shape[1]
         #self.backbone.classifier = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
-        self.backbone.classifier = nn.Identity()        
+        self.backbone.classifier = nn.Identity() 
 
     def forward(self, x):
         x = self.backbone(x)
