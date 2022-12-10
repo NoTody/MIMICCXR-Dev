@@ -1,14 +1,14 @@
-#BSUB -J "DENSENET_SLIP_SIMCLR"
+#BSUB -J "VIT_LP"
 #BSUB -R "rusage[mem=4]"
 #BSUB -R "select[hname!='skygpu19']"
 #BSUB -n 10
 #BSUB -q gpu32
 #BSUB -gpu "num=1:mode=shared:j_exclusive=yes"
-#BSUB -e DENSENET_SLIP_SIMCLR.err
-#BSUB -o DENSENET_SLIP_SIMCLR.out
+#BSUB -e VIT_LP.err
+#BSUB -o VIT_LP.out
 
 . /gpfs/share/skynet/apps/anaconda3/etc/profile.d/conda.sh
 conda activate opence_env_1.5.1
 
-python base3.py --model_load_path "/gpfs/data/denizlab/Users/hh2740/git_backups/MultiModal-Learning-Pytorch/slip_saved/epoch=23-step=28488.ckpt" --model_name "densenet121" --batch_size 64 --max_epoch 6 --save_suffix "densenet_slip_simclr" --train_percent 1.0
+python base3.py --model_load_path "None" --model_name "vitb16" --batch_size 64 --max_epoch 3 --save_suffix "vit_lp" --train_percent 1.0 --linear_prob
 

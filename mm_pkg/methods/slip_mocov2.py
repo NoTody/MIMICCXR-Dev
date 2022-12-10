@@ -1,10 +1,11 @@
 from ..methods.base import *
 from ..methods.base import BASE
+from ..losses.clip_loss import clip_loss
 from ..losses.mocov2_loss import mocov2_loss
 from ..model_utils.misc_utils import _batch_shuffle_ddp, _batch_unshuffle_ddp
 from copy import deepcopy
 
-class MOCOV2(BASE):
+class SLIP_MOCOV2(BASE):
 
     def __init__(self, args):
         super().__init__(args)
@@ -19,6 +20,15 @@ class MOCOV2(BASE):
         self.img_backbone_ema = deepcopy(self.img_backbone)
         for param in self.img_backbone_ema.parameters():
             param.requires_grad = False
+
+        self.text_backbone = bert_model(self.hparams.text_backbone, self.hparams.pool)
+
+        # clip projector
+        self.img_projector = ProjectionHeadCLIP(self.hparams.img_embedding_dim,
+                        self.hparams.projection_dim, self.hparams.dropout)
+        self.text_projector = ProjectionHeadCLIP(self.hparams.text_embedding_dim,
+                        self.hparams.projection_dim, self.hparams.dropout)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.text_backbone, use_fast=True)
 
         # mocov2 projectors
         self.mocov2_projector = nn.Sequential(
@@ -55,9 +65,17 @@ class MOCOV2(BASE):
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
-        images1, images2 = batch
+        images1, images2, text_encodings = batch
         # only use first image for clip
         images1, images2 = torch.stack((images1)), torch.stack((images2))
+
+        # clip
+        # get embeddings
+        image_features, text_features = self.img_backbone(images1), self.text_backbone(text_encodings)
+        image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
+        image_embeddings, text_embeddings = all_gather(image_embeddings), all_gather(text_embeddings)
+        # compute loss
+        c_loss = clip_loss(image_embeddings, text_embeddings, self.hparams.temperature_clip).mean()
 
         # mocov2
         # ema update
@@ -84,27 +102,33 @@ class MOCOV2(BASE):
 
         # loss
         queue = self.queue.clone().detach()
-        ssl_loss = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature) 
-                + mocov2_loss(q2, k1, queue[0], self.hparams.temperature)) / 2
+        ssl_loss = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature_mocov2)
+                + mocov2_loss(q2, k1, queue[0], self.hparams.temperature_mocov2)) / 2
 
         # update queue
         keys = torch.stack((gather(k1), gather(k2)))
         self._dequeue_and_enqueue(keys)
 
-        return {"loss": ssl_loss}
+        # slip final loss
+        loss = c_loss + self.hparams.ssl_scale * ssl_loss
+        return {"loss": loss, "clip_loss": c_loss, "ssl_loss": ssl_loss}
 
 
     def training_step(self, batch, batch_idx):
         shared_out = self.shared_forward(batch, batch_idx, "train")
-        loss = shared_out["loss"]
+        loss, clip_loss, ssl_loss = shared_out["loss"], shared_out["clip_loss"], shared_out["ssl_loss"]
         self.log("train_loss", loss, on_epoch=False, on_step=True, prog_bar=True)
+        self.log("train_clip_loss", clip_loss, on_epoch=False, on_step=True, prog_bar=True)
+        self.log("train_ssl_loss", ssl_loss, on_epoch=False, on_step=True, prog_bar=True)
         return loss
 
 
     def validation_step(self, batch, batch_idx):
         shared_out = self.shared_forward(batch, batch_idx, "val")
-        loss = shared_out["loss"]
+        loss, clip_loss, ssl_loss = shared_out["loss"], shared_out["clip_loss"], shared_out["ssl_loss"]
         self.log("val_loss", loss, on_epoch=True, on_step=False, prog_bar=True)
+        self.log("val_clip_loss", clip_loss, on_epoch=False, on_step=True, prog_bar=True)
+        self.log("val_ssl_loss", ssl_loss, on_epoch=False, on_step=True, prog_bar=True)
 
 
     @property
@@ -118,7 +142,14 @@ class MOCOV2(BASE):
     # collate_fn for tokenizing input
     def collate_fn_batch_encoding(self, batch):
         images1, images2, texts = zip(*batch)
-        return images1, images2
+        text_encodings = self.tokenizer.batch_encode_plus(
+                        list(texts),
+                        max_length=self.hparams.max_length,
+                        padding="max_length",
+                        truncation=True,
+                        add_special_tokens=True,
+                        return_tensors="pt")
+        return images1, images2, text_encodings
 
 
     def train_dataloader(self):
@@ -135,11 +166,15 @@ class MOCOV2(BASE):
 
     @staticmethod
     def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("mocov2")
+        parser = parent_parser.add_argument_group("slip_mocov2")
 
         parser.add_argument("--img_embedding_dim", type=int, default=2048)
+        parser.add_argument("--text_embedding_dim", type=int, default=768)
+        parser.add_argument("--projection_dim", type=int, default=512)
         parser.add_argument("--dropout", type=int, default=0.1)
-        parser.add_argument("--temperature", type=float, default=0.07)
+        parser.add_argument("--temperature_clip", type=float, default=0.1)
+
+        parser.add_argument("--temperature_mocov2", type=float, default=0.07)
         parser.add_argument("--ema_decay", type=float, default=0.999)
 
         # queue
@@ -148,6 +183,7 @@ class MOCOV2(BASE):
         # mocov2 projector
         parser.add_argument("--mocov2_proj_output_dim", type=int, default=2048)
         parser.add_argument("--mocov2_proj_hidden_dim", type=int, default=2048)
+        parser.add_argument("--ssl_scale", type=float, default=1.0)
 
         return parent_parser
 

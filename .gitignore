@@ -140,3 +140,5 @@ dmypy.json
 **/*_saved
 **/*.pth.tar
 **/*.csv
+**/*.jpg
+/submitit
