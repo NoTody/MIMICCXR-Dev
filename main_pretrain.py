@@ -67,7 +67,7 @@ def parse_args_pretrain():
     parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_50")
     parser.add_argument("--two_transform", default=False, action='store_true')
     # whether freeze position embedding layer proposed by mocov3 in VIT
-    parser.add_argument("--freeze_pos_embed", default=False, action='store_true')
+    parser.add_argument("--freeze_patch_embed", default=False, action='store_true')
     #parser.add_argument("--no-two_transform", dest='two_transform', action='store_false')
 
     # text model

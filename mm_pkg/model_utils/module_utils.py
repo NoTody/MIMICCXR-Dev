@@ -76,7 +76,7 @@ class densenet_model(nn.Module):
 
 # vit model
 class vit_model(nn.Module):
-    def __init__(self, size, pretrained=False, freeze_pos_embed=False, **kwargs):
+    def __init__(self, size, pretrained=False, freeze_patch_embed=False, **kwargs):
         super(vit_model, self).__init__()
 
         if size=="base":
@@ -87,7 +87,7 @@ class vit_model(nn.Module):
         else:
             pass
 
-        if freeze_pos_embed:
+        if freeze_patch_embed:
             self.backbone.patch_embed.requires_grad = False
 
     def forward(self, x):
