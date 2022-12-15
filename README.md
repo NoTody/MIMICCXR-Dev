@@ -13,4 +13,5 @@ python base3.py --model_load_path <saved_model_path> --model_name "resnet50" --b
 ```
 
 Examples on GradCam:
+
 ![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/grad_cam_example.png?raw=true)
