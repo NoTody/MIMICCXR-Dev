@@ -1,5 +1,5 @@
 # MIMICXR-MutliModal-SelfSupervision
-Multi-Modal Self-Supervision Pre-training BenchMarking on MIMICCXR
+Multi-Modal Self-Supervision Pre-training BenchMarking on training with MIMICCXR and evaluating with CheXpert
 
 Example pretraining command:
 ```
