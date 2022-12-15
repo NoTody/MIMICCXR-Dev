@@ -1,15 +1,14 @@
-#BSUB -J "RESNET_SLIP_MOCO"
+#BSUB -J "VIT_SLIP_MOCO_LP"
 #BSUB -R "rusage[mem=4]"
 #BSUB -R "select[hname!='skygpu19']"
 #BSUB -n 10
 #BSUB -q gpu32
 #BSUB -gpu "num=1:mode=shared:j_exclusive=yes"
-#BSUB -e RESNET_SLIP_MOCO.err
-#BSUB -o RESNET_SLIP_MOCO.out
+#BSUB -e ./results/VIT_SLIP_MOCO_LP.err
+#BSUB -o ./results/VIT_SLIP_MOCO_LP.out
 
 . /gpfs/share/skynet/apps/anaconda3/etc/profile.d/conda.sh
 conda activate opence_env_1.5.1
 
-python base3.py --model_load_path "/gpfs/data/denizlab/Users/hh2740/git_backups/MIMICCXR-MutliModal-SelfSupervision/submitit/slip_saved/epoch=8-step=10683-v1.ckpt" --model_name "resnet50" --batch_size 64 --max_epoch 3 --save_suffix "resnet_slip_moco" --train_percent 1.0
-
+python base3.py --model_load_path "/gpfs/data/denizlab/Users/hh2740/git_backups/MIMICCXR-MutliModal-SelfSupervision/submitit/slip_saved/epoch=13-step=33250.ckpt" --model_name "vitb16" --batch_size 64 --max_epoch 3 --save_suffix "vit_slip_moco_lp" --train_percent 1.0 --seed 2022 --linear_prob
 
