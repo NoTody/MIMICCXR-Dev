@@ -143,3 +143,5 @@ dmypy.json
 **/*.jpg
 /submitit
 **/submitit.bsub
+**/*.txt
+
