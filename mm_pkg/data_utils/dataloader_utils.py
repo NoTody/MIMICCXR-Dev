@@ -18,10 +18,10 @@ from ..data_utils.augmentation_utils import TrainTransform
 
 
 class MIMIC_CXR_Unsupervised(Dataset):
-    def __init__(self, args, dict_image_mapping, data_df_path, full_report=True, two_transform=True, train=True):
+    def __init__(self, args, dict_image_mapping, data_df_path, full_report=True, ssl_transform=True, train=True):
         self.args = args
         self.full_report = full_report
-        self.two_transform = two_transform
+        self.ssl_transform = ssl_transform
         self.data_df = pd.read_csv(data_df_path, sep='\t')
         self.train = train
         self.dict_image_mapping = dict_image_mapping
@@ -29,7 +29,7 @@ class MIMIC_CXR_Unsupervised(Dataset):
 
     def __getitem__(self, index):
         args = self.args
-        # images
+        # load images
         image_path = self.data_df.iloc[index]['dicom_path']
         image = self.dict_image_mapping[image_path]
         # to PIL images
@@ -45,16 +45,15 @@ class MIMIC_CXR_Unsupervised(Dataset):
         else:
             text = impression
 
-        transform = TrainTransform(self.two_transform)
+        # transform images
+        transform = TrainTransform(self.ssl_transform)
         images = transform(PIL_image)
-        #print(f"len(images): {len(images)}\nimages: {images}")
-        if self.two_transform:
-            return images[0], images[1], text
+
+        if self.ssl_transform:
+            return images[0], images[1], images[2], text
         else:
             return images, text
 
-
     def __len__(self):
         return len(self.data_df)
-
 

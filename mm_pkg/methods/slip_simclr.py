@@ -1,10 +1,10 @@
 from ..methods.base import *
-from ..methods.base import BASE
+from ..methods.base import BASE_SLIP
 from ..losses.clip_loss import clip_loss
 from ..losses.simclr_loss import NT_Xent
 
 
-class SLIP_SIMCLR(BASE):
+class SLIP_SIMCLR(BASE_SLIP):
 
     def __init__(self, args):
         super().__init__(args)
@@ -37,21 +37,21 @@ class SLIP_SIMCLR(BASE):
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
-        images1, images2, text_encodings = batch
+        images_clip, images_ssl1, images_ssl2, text_encodings = batch
         #print(f"images: {images1}\nshape: {len(images1)}")
         # only use first image for clip
-        images1, images2 = torch.stack((images1)), torch.stack((images2))
+        images_clip, images_ssl1, images_ssl2 = torch.stack((images_clip)), torch.stack((images_ssl1)), torch.stack((images_ssl2))
 
         # clip
         # get embeddings
-        image_features, text_features = self.img_backbone(images1), self.text_backbone(text_encodings)
+        image_features, text_features = self.img_backbone(images_clip), self.text_backbone(text_encodings)
         image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
         image_embeddings, text_embeddings = all_gather(image_embeddings), all_gather(text_embeddings)
         # compute loss
         c_loss = clip_loss(image_embeddings, text_embeddings, self.hparams.temperature).mean()
 
         # simclr 
-        feat1, feat2 = self.img_backbone(images1), self.img_backbone(images2)
+        feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         z1, z2 = self.simclr_projector(feat1), self.simclr_projector(feat2)
         ssl_loss = self.criterion(z1, z2)
 
@@ -86,31 +86,6 @@ class SLIP_SIMCLR(BASE):
             {"type": "projector", "params": self.text_projector.parameters()},
             {"type": "projector", "params": self.simclr_projector.parameters()},
         ]
-
-
-    # collate_fn for tokenizing input
-    def collate_fn_batch_encoding(self, batch):
-        images1, images2, texts = zip(*batch)
-        text_encodings = self.tokenizer.batch_encode_plus(
-                        list(texts),
-                        max_length=self.hparams.max_length,
-                        padding="max_length",
-                        truncation=True,
-                        add_special_tokens=True,
-                        return_tensors="pt")
-        return images1, images2, text_encodings
-
-
-    def train_dataloader(self):
-        return DataLoader(self.ds_train, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
-
-
-    def val_dataloader(self):
-        return DataLoader(self.ds_val, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
 
 
     @staticmethod

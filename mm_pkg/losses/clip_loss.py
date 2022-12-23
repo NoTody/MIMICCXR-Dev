@@ -25,4 +25,3 @@ def clip_loss(image_embeddings, text_embeddings, temperature):
     loss =  (images_loss + texts_loss) / 2.0    # shape: (batch_size)
     return loss
 
-

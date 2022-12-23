@@ -1,10 +1,10 @@
 from ..methods.base import *
-from ..methods.base import BASE
+from ..methods.base import BASE_SSL
 from ..losses.mocov2_loss import mocov2_loss
 from ..model_utils.misc_utils import _batch_shuffle_ddp, _batch_unshuffle_ddp
 from copy import deepcopy
 
-class MOCOV2(BASE):
+class MOCOV2(BASE_SSL):
 
     def __init__(self, args):
         super().__init__(args)
@@ -55,9 +55,9 @@ class MOCOV2(BASE):
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
-        images1, images2 = batch
+        images_ssl1, images_ssl2 = batch
         # only use first image for clip
-        images1, images2 = torch.stack((images1)), torch.stack((images2))
+        images_ssl1, images_ssl2 = torch.stack((images_ssl1)), torch.stack((images_ssl2))
 
         # mocov2
         # ema update
@@ -65,15 +65,15 @@ class MOCOV2(BASE):
         ema(self.mocov2_projector, self.mocov2_projector_ema, self.hparams.ema_decay)
 
         # original encoder output
-        feat1, feat2 = self.img_backbone(images1), self.img_backbone(images2)
+        feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         q1, q2 = self.mocov2_projector(feat1), self.mocov2_projector(feat2)
         # normalize
         q1, q2 = nn.functional.normalize(q1, dim=1), nn.functional.normalize(q1, dim=1)
 
         with torch.no_grad():
             # shuffle for making use of BN
-            images1_k, idx_unshuffle1 = _batch_shuffle_ddp(images1)
-            images2_k, idx_unshuffle2 = _batch_shuffle_ddp(images2)
+            images1_k, idx_unshuffle1 = _batch_shuffle_ddp(images_ssl1)
+            images2_k, idx_unshuffle2 = _batch_shuffle_ddp(images_ssl2)
             # ema encoder output
             feat1_ema, feat2_ema = self.img_backbone_ema(images1_k), self.img_backbone_ema(images2_k)
             k1, k2 = self.mocov2_projector_ema(feat1_ema), self.mocov2_projector_ema(feat2_ema)
@@ -113,24 +113,6 @@ class MOCOV2(BASE):
             {"type": "backbone", "params": self.img_backbone.parameters()},
             {"type": "projector", "params": self.mocov2_projector.parameters()},
         ]
-
-
-    # collate_fn for tokenizing input
-    def collate_fn_batch_encoding(self, batch):
-        images1, images2, texts = zip(*batch)
-        return images1, images2
-
-
-    def train_dataloader(self):
-        return DataLoader(self.ds_train, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
-
-
-    def val_dataloader(self):
-        return DataLoader(self.ds_val, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
 
 
     @staticmethod

@@ -25,11 +25,11 @@ class CLIP(BASE):
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
-        images, text_encodings = batch
-        images = torch.stack((images))
+        images_clip, text_encodings = batch
+        images_clip = torch.stack((images_clip))
 
         # get embeddings
-        image_features, text_features = self.img_backbone(images), self.text_backbone(text_encodings)
+        image_features, text_features = self.img_backbone(images_clip), self.text_backbone(text_encodings)
         image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
         image_embeddings, text_embeddings = all_gather(image_embeddings), all_gather(text_embeddings)
 
@@ -59,33 +59,6 @@ class CLIP(BASE):
             {"type": "projector", "params": self.img_projector.parameters()},
             {"type": "projector", "params": self.text_projector.parameters()},
         ]
-
-
-    # collate_fn for tokenizing input
-    def collate_fn_batch_encoding(self, batch):
-        images, texts = zip(*batch)
-
-        text_encodings = self.tokenizer.batch_encode_plus(
-                list(texts),
-                max_length=self.hparams.max_length,
-                padding="max_length",
-                truncation=True,
-                add_special_tokens=True,
-                return_tensors="pt")
-
-        return images, text_encodings
-
-
-    def train_dataloader(self):
-        return DataLoader(self.ds_train, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
-
-
-    def val_dataloader(self):
-        return DataLoader(self.ds_val, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
 
 
     @staticmethod

@@ -61,21 +61,18 @@ def parse_args_pretrain():
     parser.add_argument("--features_dim", type=int, default=2048)
     parser.add_argument("--clip_grad", type=float, default=0.)
     parser.add_argument('--pretrained', default=False, action='store_true')
-    #parser.add_argument('--no-pretrained', dest='pretrained', action='store_false')
 
     # image model
     parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_50")
-    parser.add_argument("--two_transform", default=False, action='store_true')
+    parser.add_argument("--ssl_transform", default=False, action='store_true')
     # whether freeze position embedding layer proposed by mocov3 in VIT
     parser.add_argument("--freeze_patch_embed", default=False, action='store_true')
-    #parser.add_argument("--no-two_transform", dest='two_transform', action='store_false')
 
     # text model
     parser.add_argument("--text_backbone", choices=TEXT_BACKBONES, type=str, default="microsoft/BiomedVLP-CXR-BERT-general")
     parser.add_argument("--max_length", type=int, default=128)
     parser.add_argument("--pool", type=str, default="cls")
     parser.add_argument('--full_report', default=False, action='store_true')
-    #parser.add_argument('--no-full_report', dest='full_report', action='store_false')
 
     # learning rate setup
     parser.add_argument("--lr_backbone", type=float, default=1e-4)

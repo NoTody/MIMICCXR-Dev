@@ -1,9 +1,9 @@
 from ..methods.base import *
-from ..methods.base import BASE
+from ..methods.base import BASE_SSL
 from ..losses.vicreg_loss import vicreg_loss
 
 
-class VICREG(BASE):
+class VICREG(BASE_SSL):
 
     def __init__(self, args):
         super().__init__(args)
@@ -29,13 +29,12 @@ class VICREG(BASE):
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
-        images1, images2 = batch
-        #print(f"images: {images1}\nshape: {len(images1)}")
+        images_ssl1, images_ssl2 = batch
         # only use first image for clip
-        images1, images2 = torch.stack((images1)), torch.stack((images2))
+        images_ssl1, images_ssl2 = torch.stack((images_ssl1)), torch.stack((images_ssl2))
 
         # vicreg
-        feat1, feat2 = self.img_backbone(images1), self.img_backbone(images2)
+        feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         z1, z2 = self.vicreg_projector(feat1), self.vicreg_projector(feat2)
         ssl_loss = vicreg_loss(z1, z2, invariance_lamb=self.hparams.invariance_lamb, 
                 variance_mu=self.hparams.variance_mu, covairance_v=self.hparams.covariance_v)
@@ -62,24 +61,6 @@ class VICREG(BASE):
             {"type": "backbone", "params": self.img_backbone.parameters()},
             {"type": "projector", "params": self.vicreg_projector.parameters()},
         ]
-
-
-    # collate_fn for tokenizing input
-    def collate_fn_batch_encoding(self, batch):
-        images1, images2, texts = zip(*batch)
-        return images1, images2
-
-
-    def train_dataloader(self):
-        return DataLoader(self.ds_train, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
-
-
-    def val_dataloader(self):
-        return DataLoader(self.ds_val, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
 
 
     @staticmethod

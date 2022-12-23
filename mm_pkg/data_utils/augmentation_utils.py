@@ -405,9 +405,9 @@ class Solarization(object):
 
 
 class TrainTransform(object):
-    def __init__(self, two_transform=True):
-        self.two_transform = two_transform
-        self.transform = transforms.Compose(
+    def __init__(self, ssl_transform=True):
+        self.ssl_transform = ssl_transform
+        self.transform_ssl_1 = transforms.Compose(
             [
                 transforms.RandomResizedCrop(
                     224, interpolation=InterpolationMode.BICUBIC
@@ -425,13 +425,12 @@ class TrainTransform(object):
                 GaussianBlur(p=1.0),
                 Solarization(p=0.0),
                 transforms.ToTensor(),
-#                transforms.Normalize((0.485, ), (0.229, ))
-#                 transforms.Normalize(
-#                     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-#                 ),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
             ]
         )
-        self.transform_prime = transforms.Compose(
+        self.transform_ssl_2 = transforms.Compose(
             [
                 transforms.RandomResizedCrop(
                     224, interpolation=InterpolationMode.BICUBIC
@@ -449,18 +448,28 @@ class TrainTransform(object):
                 GaussianBlur(p=0.1),
                 Solarization(p=0.2),
                 transforms.ToTensor(),
-#                transforms.Normalize((0.485, ), (0.229, ))
-#                 transforms.Normalize(
-#                     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-#                 ),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
             ]
         )
-    def __call__(self, sample):
-        x1 = self.transform(sample)
+        self.transform_clip = transforms.Compose([
+            transforms.RandomResizedCrop(
+                224, scale=(0.5, 1.0), interpolation=InterpolationMode.BICUBIC
+            ),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+            ),
+        ])
 
-        if self.two_transform:
-            x2 = self.transform_prime(sample)
-            return x1, x2
+    def __call__(self, sample):
+        xi = self.transform_clip(sample)
+
+        if self.ssl_transform:
+            x1 = self.transform_ssl_1(sample)
+            x2 = self.transform_ssl_2(sample)
+            return xi, x1, x2
         else:
-            return x1
+            return xi
 

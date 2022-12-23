@@ -72,11 +72,11 @@ class BASE(pl.LightningModule):
             dict_image_mapping = dict(pickle.load(handle))
         print("Trainset Loading ...")
         self.ds_train = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, 
-                two_transform=self.hparams.two_transform, full_report=self.hparams.full_report, 
+                ssl_transform=self.hparams.ssl_transform, full_report=self.hparams.full_report, 
                 data_df_path=self.hparams.train_df_path, train=True)
         print("Valset Loading ...")
         self.ds_val = MIMIC_CXR_Unsupervised(args=self.args, dict_image_mapping=dict_image_mapping, 
-                two_transform=self.hparams.two_transform, full_report=self.hparams.full_report, 
+                ssl_transform=self.hparams.ssl_transform, full_report=self.hparams.full_report, 
                 data_df_path=self.hparams.val_df_path, train=False)
         # Calculate total steps
         tb_size = self.hparams.batch_size * max(1, self.trainer.num_devices)
@@ -131,5 +131,36 @@ class BASE(pl.LightningModule):
         return DataLoader(self.ds_val, batch_size=self.hparams.batch_size,
                           num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
                           shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
+
+
+class BASE_SSL(BASE):
+
+    def __init__(self, args):
+        super().__init__(args)
+
+
+    # collate_fn for tokenizing input
+    def collate_fn_batch_encoding(self, batch):
+        _, images_ssl1, images_ssl2, _ = zip(*batch)
+        return images_ssl1, images_ssl2
+
+
+class BASE_SLIP(BASE):
+
+    def __init__(self, args):
+        super().__init__(args)
+
+
+    # collate_fn for tokenizing input
+    def collate_fn_batch_encoding(self, batch):
+        images_clip, images_ssl1, images_ssl2, texts = zip(*batch)
+        text_encodings = self.tokenizer.batch_encode_plus(
+                        list(texts),
+                        max_length=self.hparams.max_length,
+                        padding="max_length",
+                        truncation=True,
+                        add_special_tokens=True,
+                        return_tensors="pt")
+        return images_clip, images_ssl1, images_ssl2, text_encodings
 
 

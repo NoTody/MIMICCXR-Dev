@@ -1,9 +1,9 @@
 from ..methods.base import *
-from ..methods.base import BASE
+from ..methods.base import BASE_SSL
 from ..losses.simclr_loss import NT_Xent
 
 
-class SIMCLR(BASE):
+class SIMCLR(BASE_SSL):
 
     def __init__(self, args):
         super().__init__(args)
@@ -28,13 +28,12 @@ class SIMCLR(BASE):
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
-        images1, images2 = batch
-        #print(f"images: {images1}\nshape: {len(images1)}")
+        images_ssl1, images_ssl2 = batch
         # only use first image for clip
-        images1, images2 = torch.stack((images1)), torch.stack((images2))
+        images_ssl1, images_ssl2 = torch.stack((images_ssl1)), torch.stack((images_ssl2))
 
         # simclr 
-        feat1, feat2 = self.img_backbone(images1), self.img_backbone(images2)
+        feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         z1, z2 = self.simclr_projector(feat1), self.simclr_projector(feat2)
         ssl_loss = self.criterion(z1, z2)
 
@@ -62,27 +61,9 @@ class SIMCLR(BASE):
         ]
 
 
-    # collate_fn for tokenizing input
-    def collate_fn_batch_encoding(self, batch):
-        images1, images2, texts = zip(*batch)
-        return images1, images2
-
-
-    def train_dataloader(self):
-        return DataLoader(self.ds_train, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
-
-
-    def val_dataloader(self):
-        return DataLoader(self.ds_val, batch_size=self.hparams.batch_size,
-                          num_workers=self.hparams.num_workers, pin_memory=self.hparams.pin_mem,
-                          shuffle=True, drop_last=True, collate_fn=self.collate_fn_batch_encoding)
-
-
     @staticmethod
     def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("slip_simclr")
+        parser = parent_parser.add_argument_group("simclr")
 
         parser.add_argument("--img_embedding_dim", type=int, default=2048)
         parser.add_argument("--dropout", type=int, default=0.1)
@@ -91,7 +72,6 @@ class SIMCLR(BASE):
         # vicreg projector
         parser.add_argument("--simclr_proj_output_dim", type=int, default=2048)
         parser.add_argument("--simclr_proj_hidden_dim", type=int, default=2048)
-        parser.add_argument("--ssl_scale", type=float, default=1.0)
 
         return parent_parser
 
