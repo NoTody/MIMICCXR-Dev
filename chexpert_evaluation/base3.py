@@ -35,6 +35,7 @@ valid_path = '/gpfs/data/denizlab/Datasets/Public/CheXpert-v1.0/valid.csv'
 
 Traindata = pd.read_csv(train_path)
 Traindata = Traindata[Traindata['Path'].str.contains("frontal")] # use only frontal images
+# separate out part of train 
 Traindata.to_csv('/gpfs/data/denizlab/Users/skr2369/Chexpert/CheXpert-v1/U1-V1/train_mod.csv', index = False)
 print("Train data length:", len(Traindata))
 
