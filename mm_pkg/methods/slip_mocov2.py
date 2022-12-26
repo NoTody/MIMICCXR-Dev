@@ -1,6 +1,7 @@
 from ..methods.base import *
 from ..methods.base import BASE_SLIP
 from ..losses.clip_loss import clip_loss
+from ..losses.convirt_loss import ConVIRT_Loss
 from ..losses.mocov2_loss import mocov2_loss
 from ..model_utils.misc_utils import _batch_shuffle_ddp, _batch_unshuffle_ddp
 from copy import deepcopy
@@ -23,11 +24,25 @@ class SLIP_MOCOV2(BASE_SLIP):
 
         self.text_backbone = bert_model(self.hparams.text_backbone, self.hparams.pool)
 
-        # clip projector
-        self.img_projector = ProjectionHeadCLIP(self.hparams.img_embedding_dim,
-                        self.hparams.projection_dim, self.hparams.dropout)
-        self.text_projector = ProjectionHeadCLIP(self.hparams.text_embedding_dim,
-                        self.hparams.projection_dim, self.hparams.dropout)
+        if self.hparams.multi_modal == "CLIP":
+            # clip projector
+            self.img_projector = ProjectionHeadCLIP(self.hparams.img_embedding_dim,
+                            self.hparams.projection_dim, self.hparams.dropout)
+            self.text_projector = ProjectionHeadCLIP(self.hparams.text_embedding_dim,
+                            self.hparams.projection_dim, self.hparams.dropout)
+        elif self.hparams.multi_modal == "ConVIRT":
+            # convirt projector
+            self.img_projector = ProjectionHeadConVIRT(self.hparams.img_embedding_dim, \
+                            self.hparams.projection_dim, self.hparams.dropout)
+            self.text_projector = ProjectionHeadConVIRT(self.hparams.text_embedding_dim, \
+                            self.hparams.projection_dim, self.hparams.dropout)
+        else:
+            raise NotImplementedError("Multi-Modal Method Not Imeplmented!")
+
+        if self.hparams.multi_modal == "ConVIRT":
+            self.criterion = ConVIRT_Loss(self.hparams.batch_size, self.hparams.alpha, self.hparams.temperature_mm, \
+                                        self.hparams.gpus * self.hparams.num_nodes)
+
         self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.text_backbone, use_fast=True)
 
         # mocov2 projectors
@@ -69,13 +84,18 @@ class SLIP_MOCOV2(BASE_SLIP):
         # only use first image for clip
         images_clip, images_ssl1, images_ssl2 = torch.stack((images_clip)), torch.stack((images_ssl1)), torch.stack((images_ssl2))
 
-        # clip
         # get embeddings
         image_features, text_features = self.img_backbone(images_clip), self.text_backbone(text_encodings)
         image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
         image_embeddings, text_embeddings = all_gather(image_embeddings), all_gather(text_embeddings)
+
         # compute loss
-        c_loss = clip_loss(image_embeddings, text_embeddings, self.hparams.temperature_clip).mean()
+        if self.hparams.multi_modal == "CLIP":
+            mm_loss = clip_loss(image_embeddings, text_embeddings, self.hparams.temperature_mm).mean()
+        elif self.hparams.multi_modal == "ConVIRT":
+            mm_loss = self.criterion(image_embeddings, text_embeddings)
+        else:
+            raise NotImplementedError("Multi-Modal Method Not Imeplmented!") 
 
         # mocov2
         # ema update
@@ -110,7 +130,7 @@ class SLIP_MOCOV2(BASE_SLIP):
         self._dequeue_and_enqueue(keys)
 
         # slip final loss
-        loss = c_loss + self.hparams.ssl_scale * ssl_loss
+        loss = mm_loss + self.hparams.ssl_scale * ssl_loss
         return {"loss": loss, "clip_loss": c_loss, "ssl_loss": ssl_loss}
 
 
@@ -147,7 +167,9 @@ class SLIP_MOCOV2(BASE_SLIP):
         parser.add_argument("--text_embedding_dim", type=int, default=768)
         parser.add_argument("--projection_dim", type=int, default=512)
         parser.add_argument("--dropout", type=int, default=0.1)
-        parser.add_argument("--temperature_clip", type=float, default=0.1)
+
+        parser.add_argument("--temperature_mm", type=float, default=0.1)
+        parser.add_argument("--alpha", type=float, default=0.75)
 
         parser.add_argument("--temperature_mocov2", type=float, default=0.07)
         parser.add_argument("--ema_decay", type=float, default=0.999)
