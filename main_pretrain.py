@@ -54,11 +54,12 @@ def parse_args_pretrain():
     parser.add_argument("--val_interval", type=float, default=1.)
     parser.add_argument("--use_ddp", action='store_true')
     parser.add_argument('--pin_mem', default=False, action='store_true')
+    parser.add_argument("--mode", choices=["train", "resume"], type=str, default="train")
+    parser.add_argument("--checkpoint_path", type=str, default="None")
 
     # general model args
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_epochs", type=int, default=100)
-    parser.add_argument("--features_dim", type=int, default=2048)
     parser.add_argument("--clip_grad", type=float, default=0.)
     parser.add_argument('--pretrained', default=False, action='store_true')
 
@@ -140,12 +141,16 @@ def main():
         callbacks=callbacks,
         strategy="ddp",
         sync_batchnorm=True
-        #strategy=DDPStrategy(find_unused_parameters=True)
-        #if args.use_ddp
-        #else None,
     )
 
-    trainer.fit(model)
+    if args.mode == "train":
+        print("Train model")
+        trainer.fit(model)
+    elif args.mode == "resume":
+        print("Resume model")
+        trainer.fit(model, ckpt_path=hparams.checkpoint_path)
+    else:
+        raise NotImplementedError("hparams.mode not implemented")
 
 
 if __name__ == "__main__":

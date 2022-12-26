@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-#from ..model_utils.misc_utils import gather, get_rank
 from ..model_utils.misc_utils import GatherLayer
 
 
@@ -32,6 +31,9 @@ class NT_Xent(nn.Module):
         """
         N = 2 * self.batch_size * self.world_size
 
+        # normalize
+        z_i, z_j = F.normalize(z_i, dim=-1), F.normalize(z_j, dim=-1)
+
         z = torch.cat((z_i, z_j), dim=0)
         if self.world_size > 1:
             z = torch.cat(GatherLayer.apply(z), dim=0)
@@ -50,5 +52,4 @@ class NT_Xent(nn.Module):
         loss = self.criterion(logits, labels)
         loss /= N
         return loss
-
 

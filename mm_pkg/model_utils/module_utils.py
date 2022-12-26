@@ -33,7 +33,7 @@ def get_embed(model, text_encodings, pool):
 
 # resnet model
 class resnet_model(nn.Module):
-    def __init__(self, size, features_dim, pretrained=False):
+    def __init__(self, size, pretrained=False):
         super(resnet_model, self).__init__()
 
         if size==18:
@@ -45,21 +45,18 @@ class resnet_model(nn.Module):
         else:
             raise NotImplementedError(f"ResNet with size {size} is not implemented!")
 
-        #self.backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         self.feature_dim_in = self.backbone.fc.weight.shape[1]
         #self.backbone.fc = nn.Linear(in_features=self.feature_dim_in, out_features=features_dim, bias=True)
         self.backbone.fc = nn.Identity()
 
     def forward(self, x):
         x = self.backbone(x)
-        #x = x.flatten()
-        #x = self.fc(x)
         return x
 
 
 # densenet model
 class densenet_model(nn.Module):
-    def __init__(self, size, features_dim, pretrained=False):
+    def __init__(self, size, pretrained=False):
         super(densenet_model, self).__init__()
 
         if size == 121:
@@ -130,6 +127,25 @@ class ProjectionHeadCLIP(nn.Module):
         x = self.dropout(x)
         x = x + projected
         x = self.layer_norm(x)
+        return x
+
+# convirt projection head
+class ProjectionHeadConVIRT(nn.Module):
+    def __init__(
+        self,
+        embedding_dim,
+        projection_dim,
+        dropout,
+    ):
+        super().__init__()
+        self.projection = nn.Linear(embedding_dim, projection_dim)
+        self.relu = nn.ReLU()
+        self.fc = nn.Linear(projection_dim, projection_dim)
+    
+    def forward(self, x):
+        projected = self.projection(x)
+        x = self.relu(projected)
+        x = self.fc(x)
         return x
 
 

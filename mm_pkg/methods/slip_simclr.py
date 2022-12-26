@@ -26,19 +26,20 @@ class SLIP_SIMCLR(BASE_SLIP):
         self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.text_backbone, use_fast=True)
         
         # simclr objective
-        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature)
+        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature, \
+                        self.hparams.gpus * self.hparams.num_nodes)
 
         # simclr projector
         self.simclr_projector = nn.Sequential(
-            nn.Linear(self.hparams.img_embedding_dim, self.hparams.simclr_proj_hidden_dim),
-            nn.ReLU(),
-            nn.Linear(self.hparams.simclr_proj_hidden_dim, self.hparams.simclr_proj_output_dim),
+            nn.Linear(self.hparams.img_embedding_dim, self.hparams.simclr_proj_hidden_dim, bias=False),
+            nn.BatchNorm1d(self.hparams.simclr_proj_hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.hparams.simclr_proj_hidden_dim, self.hparams.simclr_proj_output_dim, bias=True),
         )
 
 
     def shared_forward(self, batch, batch_idx, mode="train"):
         images_clip, images_ssl1, images_ssl2, text_encodings = batch
-        #print(f"images: {images1}\nshape: {len(images1)}")
         # only use first image for clip
         images_clip, images_ssl1, images_ssl2 = torch.stack((images_clip)), torch.stack((images_ssl1)), torch.stack((images_ssl2))
 
@@ -99,9 +100,9 @@ class SLIP_SIMCLR(BASE_SLIP):
         parser.add_argument("--dropout", type=int, default=0.1)
         parser.add_argument("--temperature", type=float, default=0.1)
 
-        # vicreg projector
-        parser.add_argument("--simclr_proj_output_dim", type=int, default=2048)
-        parser.add_argument("--simclr_proj_hidden_dim", type=int, default=2048)
+        # simclr projector
+        parser.add_argument("--simclr_proj_hidden_dim", type=int, default=512)
+        parser.add_argument("--simclr_proj_output_dim", type=int, default=128)
         parser.add_argument("--ssl_scale", type=float, default=1.0)
 
         return parent_parser

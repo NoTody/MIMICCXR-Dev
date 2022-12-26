@@ -17,13 +17,15 @@ class SIMCLR(BASE_SSL):
         self.img_backbone = self.img_backbones[img_backbone]
 
         # simclr objective        
-        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature)
+        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature, \
+                                self.hparams.gpus * self.hparams.num_nodes)
 
         # simclr projector
         self.simclr_projector = nn.Sequential(
-            nn.Linear(self.hparams.img_embedding_dim, self.hparams.simclr_proj_hidden_dim),
-            nn.ReLU(),
-            nn.Linear(self.hparams.simclr_proj_hidden_dim, self.hparams.simclr_proj_output_dim),
+            nn.Linear(self.hparams.img_embedding_dim, self.hparams.simclr_proj_hidden_dim, bias=False),
+            nn.BatchNorm1d(self.hparams.simclr_proj_hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.hparams.simclr_proj_hidden_dim, self.hparams.simclr_proj_output_dim, bias=True),
         )
 
 
@@ -69,9 +71,9 @@ class SIMCLR(BASE_SSL):
         parser.add_argument("--dropout", type=int, default=0.1)
         parser.add_argument("--temperature", type=float, default=0.1)
 
-        # vicreg projector
-        parser.add_argument("--simclr_proj_output_dim", type=int, default=2048)
-        parser.add_argument("--simclr_proj_hidden_dim", type=int, default=2048)
+        # simclr projector
+        parser.add_argument("--simclr_proj_hidden_dim", type=int, default=512)
+        parser.add_argument("--simclr_proj_output_dim", type=int, default=128)
 
         return parent_parser
 

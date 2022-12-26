@@ -27,10 +27,10 @@ class BASE(pl.LightningModule):
 
         # get backbone
         self.img_backbones = {
-            "resnet2d_18": resnet_model(size=18, features_dim=self.hparams.features_dim, pretrained=self.hparams.pretrained),
-            "resnet2d_50": resnet_model(size=50, features_dim=self.hparams.features_dim, pretrained=self.hparams.pretrained),
-            "resnet2d_101": resnet_model(size=101, features_dim=self.hparams.features_dim, pretrained=self.hparams.pretrained),
-            "densenet2d_121": densenet_model(size=121, features_dim=self.hparams.features_dim, pretrained=self.hparams.pretrained),
+            "resnet2d_18": resnet_model(size=18, pretrained=self.hparams.pretrained),
+            "resnet2d_50": resnet_model(size=50, pretrained=self.hparams.pretrained),
+            "resnet2d_101": resnet_model(size=101, pretrained=self.hparams.pretrained),
+            "densenet2d_121": densenet_model(size=121, pretrained=self.hparams.pretrained),
             "vit2d_b16": vit_model("base", self.hparams.pretrained, self.hparams.freeze_patch_embed),
         }
 

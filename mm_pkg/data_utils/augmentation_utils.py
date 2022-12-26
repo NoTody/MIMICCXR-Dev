@@ -383,17 +383,6 @@ class GaussianNoise(object):
         return sample
 
 
-class GaussianBlur(object):
-    def __init__(self, p):
-        self.p = p
-    def __call__(self, img):
-        if np.random.rand() < self.p:
-            sigma = np.random.rand() * 1.9 + 0.1
-            return img.filter(ImageFilter.GaussianBlur(sigma))
-        else:
-            return img
-
-
 class Solarization(object):
     def __init__(self, p):
         self.p = p
@@ -406,6 +395,7 @@ class Solarization(object):
 
 class TrainTransform(object):
     def __init__(self, ssl_transform=True):
+        # self-supervised learning transform
         self.ssl_transform = ssl_transform
         self.transform_ssl_1 = transforms.Compose(
             [
@@ -416,13 +406,12 @@ class TrainTransform(object):
                 transforms.RandomApply(
                     [
                         transforms.ColorJitter(
-                            brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1
+                            brightness=0.4, contrast=0.4, saturation=0, hue=0
                         )
                     ],
                     p=0.8,
                 ),
-                transforms.RandomGrayscale(p=0.2),
-                GaussianBlur(p=1.0),
+                transforms.GaussianBlur(23, sigma=(0.1, 2.0)),
                 Solarization(p=0.0),
                 transforms.ToTensor(),
                 transforms.Normalize(
@@ -439,13 +428,12 @@ class TrainTransform(object):
                 transforms.RandomApply(
                     [
                         transforms.ColorJitter(
-                            brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1
+                            brightness=0.4, contrast=0.4, saturation=0, hue=0
                         )
                     ],
                     p=0.8,
                 ),
-                transforms.RandomGrayscale(p=0.2),
-                GaussianBlur(p=0.1),
+                transforms.GaussianBlur(23, sigma=(0.1, 2.0)),
                 Solarization(p=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize(
@@ -453,10 +441,22 @@ class TrainTransform(object):
                 ),
             ]
         )
-        self.transform_clip = transforms.Compose([
+        # multi-modal transform (based on ConVIRT augmentations)
+        self.transform_mm = transforms.Compose([
             transforms.RandomResizedCrop(
-                224, scale=(0.5, 1.0), interpolation=InterpolationMode.BICUBIC
+                224, scale=(0.6, 1.0), interpolation=InterpolationMode.BICUBIC
             ),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomAffine((-20, 20), translate=(0.1, 0.1), scale=(0.95, 1.05)),
+            transforms.RandomApply(
+                [
+                    transforms.ColorJitter(
+                        brightness=(0.6, 1.4), contrast=(0.6, 1.4), saturation=0, hue=0,
+                    )
+                ],
+                p=0.5,
+            ),
+            transforms.GaussianBlur(23, sigma=(0.1, 3.0)),
             transforms.ToTensor(),
             transforms.Normalize(
                     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -464,7 +464,7 @@ class TrainTransform(object):
         ])
 
     def __call__(self, sample):
-        xi = self.transform_clip(sample)
+        xi = self.transform_mm(sample)
 
         if self.ssl_transform:
             x1 = self.transform_ssl_1(sample)

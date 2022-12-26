@@ -156,8 +156,8 @@ class SLIP_MOCOV2(BASE_SLIP):
         parser.add_argument("--queue_size", type=int, default=65536)
 
         # mocov2 projector
-        parser.add_argument("--mocov2_proj_output_dim", type=int, default=2048)
-        parser.add_argument("--mocov2_proj_hidden_dim", type=int, default=2048)
+        parser.add_argument("--mocov2_proj_hidden_dim", type=int, default=512)
+        parser.add_argument("--mocov2_proj_output_dim", type=int, default=128)
         parser.add_argument("--ssl_scale", type=float, default=1.0)
 
         return parent_parser

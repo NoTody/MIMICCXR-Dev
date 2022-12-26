@@ -68,7 +68,7 @@ class MOCOV2(BASE_SSL):
         feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         q1, q2 = self.mocov2_projector(feat1), self.mocov2_projector(feat2)
         # normalize
-        q1, q2 = nn.functional.normalize(q1, dim=1), nn.functional.normalize(q1, dim=1)
+        q1, q2 = nn.functional.normalize(q1, dim=-1), nn.functional.normalize(q1, dim=-1)
 
         with torch.no_grad():
             # shuffle for making use of BN
@@ -128,8 +128,8 @@ class MOCOV2(BASE_SSL):
         parser.add_argument("--queue_size", type=int, default=65536)
 
         # mocov2 projector
-        parser.add_argument("--mocov2_proj_output_dim", type=int, default=2048)
-        parser.add_argument("--mocov2_proj_hidden_dim", type=int, default=2048)
+        parser.add_argument("--mocov2_proj_hidden_dim", type=int, default=512)
+        parser.add_argument("--mocov2_proj_output_dim", type=int, default=128)
 
         return parent_parser
 
