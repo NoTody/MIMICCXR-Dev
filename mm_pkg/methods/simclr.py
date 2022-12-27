@@ -9,15 +9,14 @@ class SIMCLR(BASE_SSL):
         super().__init__(args)
 
         # Build Models
-        self._build_model(self.hparams.img_backbone, self.hparams.text_backbone, 
-                    self.hparams.dropout)
+        self._build_model()
 
 
-    def _build_model(self, img_backbone, text_backbone, dropout):
-        self.img_backbone = self.img_backbones[img_backbone]
+    def _build_model(self):
+        super()._build_model()
 
         # simclr objective        
-        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature, \
+        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature_ssl, \
                                 self.hparams.gpus * self.hparams.num_nodes)
 
         # simclr projector
@@ -29,7 +28,7 @@ class SIMCLR(BASE_SSL):
         )
 
 
-    def shared_forward(self, batch, batch_idx, mode="train"):
+    def shared_forward(self, batch, batch_idx):
         images_ssl1, images_ssl2 = batch
         # only use first image for clip
         images_ssl1, images_ssl2 = torch.stack((images_ssl1)), torch.stack((images_ssl2))
@@ -40,19 +39,6 @@ class SIMCLR(BASE_SSL):
         ssl_loss = self.criterion(z1, z2)
 
         return {"loss": ssl_loss}
-
-
-    def training_step(self, batch, batch_idx):
-        shared_out = self.shared_forward(batch, batch_idx, "train")
-        loss = shared_out["loss"]
-        self.log("train_loss", loss, on_epoch=False, on_step=True, prog_bar=True)
-        return loss
-
-
-    def validation_step(self, batch, batch_idx):
-        shared_out = self.shared_forward(batch, batch_idx, "val")
-        loss = shared_out["loss"]
-        self.log("val_loss", loss, on_epoch=True, on_step=False, prog_bar=True)
 
 
     @property
@@ -66,10 +52,6 @@ class SIMCLR(BASE_SSL):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("simclr")
-
-        parser.add_argument("--img_embedding_dim", type=int, default=2048)
-        parser.add_argument("--dropout", type=int, default=0.1)
-        parser.add_argument("--temperature", type=float, default=0.1)
 
         # simclr projector
         parser.add_argument("--simclr_proj_hidden_dim", type=int, default=512)

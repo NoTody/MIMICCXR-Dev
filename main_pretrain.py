@@ -63,9 +63,13 @@ def parse_args_pretrain():
     parser.add_argument("--clip_grad", type=float, default=0.)
     parser.add_argument('--pretrained', default=False, action='store_true')
 
+    # multi-modal method for SLIP. used when SLIP is called
+    parser.add_argument("--multi_modal", choices=["CLIP", "ConVIRT", "None"], type=str, default="None")
+
     # image model
     parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_50")
     parser.add_argument("--ssl_transform", default=False, action='store_true')
+    parser.add_argument("--temperature_ssl", type=float, default=0.07)
     # whether freeze position embedding layer proposed by mocov3 in VIT
     parser.add_argument("--freeze_patch_embed", default=False, action='store_true')
 
@@ -74,6 +78,17 @@ def parse_args_pretrain():
     parser.add_argument("--max_length", type=int, default=128)
     parser.add_argument("--pool", type=str, default="cls")
     parser.add_argument('--full_report', default=False, action='store_true')
+
+    # encoder/projector dimension
+    parser.add_argument("--img_embedding_dim", type=int, default=2048)
+    parser.add_argument("--text_embedding_dim", type=int, default=768)
+    parser.add_argument("--projection_dim", type=int, default=512)
+    parser.add_argument("--dropout", type=int, default=0.1)
+
+    # multimodal loss temperture and hyper-parameters
+    parser.add_argument("--temperature_mm", type=float, default=0.07)
+    parser.add_argument("--alpha", type=float, default=0.75)
+    parser.add_argument("--ssl_scale", type=float, default=1.0)
 
     # learning rate setup
     parser.add_argument("--lr_backbone", type=float, default=1e-4)

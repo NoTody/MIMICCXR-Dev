@@ -10,12 +10,12 @@ class MOCOV2(BASE_SSL):
         super().__init__(args)
 
         # Build Models
-        self._build_model(self.hparams.img_backbone, self.hparams.dropout)
+        self._build_model()
 
 
-    def _build_model(self, img_backbone, dropout):
-        # model backbones
-        self.img_backbone = self.img_backbones[img_backbone]
+    def _build_model(self):
+        super()._build_model()
+        # ema backbones
         self.img_backbone_ema = deepcopy(self.img_backbone)
         for param in self.img_backbone_ema.parameters():
             param.requires_grad = False
@@ -54,7 +54,7 @@ class MOCOV2(BASE_SSL):
         self.queue_ptr[0] = ptr  # type: ignore
 
 
-    def shared_forward(self, batch, batch_idx, mode="train"):
+    def shared_forward(self, batch, batch_idx):
         images_ssl1, images_ssl2 = batch
         # only use first image for clip
         images_ssl1, images_ssl2 = torch.stack((images_ssl1)), torch.stack((images_ssl2))
@@ -84,27 +84,14 @@ class MOCOV2(BASE_SSL):
 
         # loss
         queue = self.queue.clone().detach()
-        ssl_loss = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature) 
-                + mocov2_loss(q2, k1, queue[0], self.hparams.temperature)) / 2
+        ssl_loss = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature_ssl) 
+                + mocov2_loss(q2, k1, queue[0], self.hparams.temperature_ssl)) / 2
 
         # update queue
         keys = torch.stack((gather(k1), gather(k2)))
         self._dequeue_and_enqueue(keys)
 
         return {"loss": ssl_loss}
-
-
-    def training_step(self, batch, batch_idx):
-        shared_out = self.shared_forward(batch, batch_idx, "train")
-        loss = shared_out["loss"]
-        self.log("train_loss", loss, on_epoch=False, on_step=True, prog_bar=True)
-        return loss
-
-
-    def validation_step(self, batch, batch_idx):
-        shared_out = self.shared_forward(batch, batch_idx, "val")
-        loss = shared_out["loss"]
-        self.log("val_loss", loss, on_epoch=True, on_step=False, prog_bar=True)
 
 
     @property
@@ -119,9 +106,7 @@ class MOCOV2(BASE_SSL):
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("mocov2")
 
-        parser.add_argument("--img_embedding_dim", type=int, default=2048)
-        parser.add_argument("--dropout", type=int, default=0.1)
-        parser.add_argument("--temperature", type=float, default=0.07)
+        # mocov2 hyper-parameters
         parser.add_argument("--ema_decay", type=float, default=0.999)
 
         # queue

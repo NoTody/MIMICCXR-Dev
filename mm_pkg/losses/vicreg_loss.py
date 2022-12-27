@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from ..model_utils.misc_utils import *
+from ..model_utils.misc_utils import gather 
 
 
 def invariance_loss(z1, z2):
@@ -30,9 +30,9 @@ def covariance_loss(z1, z2):
 
 
 def vicreg_loss(z1, z2, invariance_lamb, variance_mu, covairance_v):
-    invar_loss = invariance_loss(z1, z2)
-
     z1, z2 = gather(z1), gather(z2)
+    
+    invar_loss = invariance_loss(z1, z2)
     var_loss = variance_loss(z1, z2)
     cov_loss = covariance_loss(z1, z2)
 

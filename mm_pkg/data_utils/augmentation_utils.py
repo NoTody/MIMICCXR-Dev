@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import math
 import h5py
+import torch.nn as nn
 from scipy import ndimage as nd
 from scipy.ndimage import rotate, shift
 from PIL import ImageOps, ImageFilter, Image
@@ -370,17 +371,16 @@ class RepeatChannels(object):
         return self.__class__.__name__ + '()'
 
 
-class GaussianNoise(object):
-    # The function produces noise with elements drawn from a Gaussian distribution of zero mean and unit variance. Multiply by sqrt(0.1) to have the desired variance.
-    def __init__(self, mean=0, coefficient=0.1**0.5):
-        self.mean = mean
-        self.coefficient = coefficient
-    def __call__(self, sample):
-        # noise to image with a 50% chance
-        prob = np.random.random_sample()
-        if prob < 0.5:
-            sample = sample + self.mean + self.coefficient*torch.rand(sample.size())
-        return sample
+class GaussianBlur(object):
+    def __init__(self, p, sigma_min, sigma_max):
+        self.p = p
+        self.sigma_min, self.sigma_max = sigma_min, sigma_max
+    def __call__(self, img):
+        if np.random.rand() < self.p:
+            sigma = np.random.rand() * (self.sigma_max - self.sigma_min)+ self.sigma_min
+            return img.filter(ImageFilter.GaussianBlur(sigma))
+        else:
+            return img
 
 
 class Solarization(object):
@@ -395,12 +395,12 @@ class Solarization(object):
 
 class TrainTransform(object):
     def __init__(self, ssl_transform=True):
-        # self-supervised learning transform
+        # self-supervised learning transform (based on original VICREG augmentations)
         self.ssl_transform = ssl_transform
         self.transform_ssl_1 = transforms.Compose(
             [
                 transforms.RandomResizedCrop(
-                    224, interpolation=InterpolationMode.BICUBIC
+                    224, scale=(0.75, 1.0), interpolation=InterpolationMode.BICUBIC
                 ),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.RandomApply(
@@ -411,7 +411,7 @@ class TrainTransform(object):
                     ],
                     p=0.8,
                 ),
-                transforms.GaussianBlur(23, sigma=(0.1, 2.0)),
+                GaussianBlur(p=1.0, sigma_min=0.1, sigma_max=2.0),
                 Solarization(p=0.0),
                 transforms.ToTensor(),
                 transforms.Normalize(
@@ -422,7 +422,7 @@ class TrainTransform(object):
         self.transform_ssl_2 = transforms.Compose(
             [
                 transforms.RandomResizedCrop(
-                    224, interpolation=InterpolationMode.BICUBIC
+                    224, scale=(0.75, 1.0), interpolation=InterpolationMode.BICUBIC
                 ),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.RandomApply(
@@ -433,7 +433,7 @@ class TrainTransform(object):
                     ],
                     p=0.8,
                 ),
-                transforms.GaussianBlur(23, sigma=(0.1, 2.0)),
+                GaussianBlur(p=0.1, sigma_min=0.1, sigma_max=2.0),
                 Solarization(p=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize(
@@ -441,13 +441,13 @@ class TrainTransform(object):
                 ),
             ]
         )
-        # multi-modal transform (based on ConVIRT augmentations)
+        # multi-modal transform (based on original ConVIRT augmentations)
         self.transform_mm = transforms.Compose([
             transforms.RandomResizedCrop(
                 224, scale=(0.6, 1.0), interpolation=InterpolationMode.BICUBIC
             ),
             transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomAffine((-20, 20), translate=(0.1, 0.1), scale=(0.95, 1.05)),
+            transforms.RandomAffine((-20, 20), translate=(0.09, 0.10), scale=(0.95, 1.05)),
             transforms.RandomApply(
                 [
                     transforms.ColorJitter(
@@ -456,7 +456,7 @@ class TrainTransform(object):
                 ],
                 p=0.5,
             ),
-            transforms.GaussianBlur(23, sigma=(0.1, 3.0)),
+            GaussianBlur(p=0.5, sigma_min=0.1, sigma_max=3.0),
             transforms.ToTensor(),
             transforms.Normalize(
                     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torch.nn.functional as F
+from ..model_utils.misc_utils import gather
 
 
 def cross_entropy(preds, targets, reduction='none'):
@@ -13,6 +14,9 @@ def cross_entropy(preds, targets, reduction='none'):
         return loss.mean()
 
 def clip_loss(image_embeddings, text_embeddings, temperature):
+    image_embeddings, text_embeddings = gather(image_embeddings), gather(text_embeddings)
+    # normalize
+    image_embeddings, text_embeddings = F.normalize(image_embeddings, dim=-1), F.normalize(text_embeddings, dim=-1)
     # compute loss
     logits = (text_embeddings @ image_embeddings.T) / temperature
     images_similarity = image_embeddings @ image_embeddings.T

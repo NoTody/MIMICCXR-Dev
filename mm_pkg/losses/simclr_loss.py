@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..model_utils.misc_utils import GatherLayer
-
+from ..model_utils.misc_utils import gather
 
 class NT_Xent(nn.Module):
     def __init__(self, batch_size, temperature=0.1, world_size=1):
@@ -36,7 +35,7 @@ class NT_Xent(nn.Module):
 
         z = torch.cat((z_i, z_j), dim=0)
         if self.world_size > 1:
-            z = torch.cat(GatherLayer.apply(z), dim=0)
+            z = gather(z) 
 
         sim = self.similarity_f(z.unsqueeze(1), z.unsqueeze(0)) / self.temperature
 

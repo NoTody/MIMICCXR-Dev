@@ -12,7 +12,9 @@ from transformers import AutoTokenizer, get_cosine_schedule_with_warmup
 from ..model_utils.misc_utils import *
 from ..model_utils.misc_utils import WarmupCosineSchedule
 from ..model_utils.module_utils import *
-from ..model_utils.module_utils import ProjectionHeadCLIP
+from ..model_utils.module_utils import ProjectionHeadCLIP, ProjectionHeadConVIRT
+from ..losses.clip_loss import clip_loss
+from ..losses.convirt_loss import ConVIRT_Loss
 from ..data_utils.dataloader_utils import MIMIC_CXR_Unsupervised
 
 
@@ -35,21 +37,24 @@ class BASE(pl.LightningModule):
         }
 
 
-    # dummy forward. to be overrided
-    def shared_forward(self, batch, batch_idx, mode):
-        dummy_loss = 0
-        return {"loss": dummy_loss}
+    def _build_model(self):
+        self.img_backbone = self.img_backbones[self.hparams.img_backbone]
+
+
+    # virtual method
+    def shared_forward(self, batch, batch_idx):
+        raise NotImplementedError("shared_forward Not Implemented!")
 
 
     def training_step(self, batch, batch_idx):
-        shared_out = self.shared_forward(batch, batch_idx, "train")
+        shared_out = self.shared_forward(batch, batch_idx)
         loss = shared_out["loss"]
         self.log("train_loss", loss, on_epoch=False, on_step=True, prog_bar=True)
         return loss
 
 
     def validation_step(self, batch, batch_idx):
-        shared_out = self.shared_forward(batch, batch_idx, "val")
+        shared_out = self.shared_forward(batch, batch_idx)
         loss = shared_out["loss"]
         self.log("val_loss", loss, on_epoch=True, on_step=False, prog_bar=True)
 
@@ -141,7 +146,7 @@ class BASE_SSL(BASE):
 
     # collate_fn for tokenizing input
     def collate_fn_batch_encoding(self, batch):
-        _, images_ssl1, images_ssl2, _ = zip(*batch)
+        _, images, images_ssl2, _ = zip(*batch)
         return images_ssl1, images_ssl2
 
 
@@ -151,9 +156,73 @@ class BASE_SLIP(BASE):
         super().__init__(args)
 
 
+    def _build_model(self):
+        # image backbone
+        super()._build_model()
+        # text backbone
+        self.text_backbone = bert_model(self.hparams.text_backbone, self.hparams.pool)
+
+        if self.hparams.multi_modal == "CLIP":
+            # clip projector
+            self.img_projector = ProjectionHeadCLIP(self.hparams.img_embedding_dim,
+                            self.hparams.projection_dim, self.hparams.dropout)
+            self.text_projector = ProjectionHeadCLIP(self.hparams.text_embedding_dim,
+                            self.hparams.projection_dim, self.hparams.dropout)
+        elif self.hparams.multi_modal == "ConVIRT":
+            # convirt projector
+            self.img_projector = ProjectionHeadConVIRT(self.hparams.img_embedding_dim, \
+                            self.hparams.projection_dim, self.hparams.dropout)
+            self.text_projector = ProjectionHeadConVIRT(self.hparams.text_embedding_dim, \
+                            self.hparams.projection_dim, self.hparams.dropout)
+            self.criterion = ConVIRT_Loss(self.hparams.batch_size, self.hparams.alpha, self.hparams.temperature_mm, \
+                                        self.hparams.gpus * self.hparams.num_nodes)
+        else:
+            raise NotImplementedError("Multi-Modal Method Not Imeplmented!")
+
+        self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.text_backbone, use_fast=True)
+
+
+    def shared_forward(self, batch, batch_idx):
+        images_mm, images_ssl1, images_ssl2, text_encodings = batch
+        # only use first image for clip
+        images_mm, images_ssl1, images_ssl2 = torch.stack((images_mm)), \
+                    torch.stack((images_ssl1)), torch.stack((images_ssl2))
+
+        # get embeddings
+        image_features, text_features = self.img_backbone(images_mm), self.text_backbone(text_encodings)
+        image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
+
+        # compute loss
+        if self.hparams.multi_modal == "CLIP":
+            mm_loss = clip_loss(image_embeddings, text_embeddings, self.hparams.temperature_mm).mean()
+        elif self.hparams.multi_modal == "ConVIRT":
+            mm_loss = self.criterion(image_embeddings, text_embeddings)
+        else:
+            raise NotImplementedError("Multi-Modal Method Not Imeplmented!")
+
+        return images_ssl1, images_ssl2, mm_loss
+
+
+    def training_step(self, batch, batch_idx):
+        shared_out = self.shared_forward(batch, batch_idx)
+        loss, mm_loss, ssl_loss = shared_out["loss"], shared_out["mm_loss"], shared_out["ssl_loss"]
+        self.log("train_loss", loss, on_epoch=False, on_step=True, prog_bar=True)
+        self.log("train_mm_loss", mm_loss, on_epoch=False, on_step=True, prog_bar=True)
+        self.log("train_ssl_loss", ssl_loss, on_epoch=False, on_step=True, prog_bar=True)
+        return loss
+
+
+    def validation_step(self, batch, batch_idx):
+        shared_out = self.shared_forward(batch, batch_idx)
+        loss, mm_loss, ssl_loss = shared_out["loss"], shared_out["mm_loss"], shared_out["ssl_loss"]
+        self.log("val_loss", loss, on_epoch=True, on_step=False, prog_bar=True)
+        self.log("val_mm_loss", mm_loss, on_epoch=True, on_step=False, prog_bar=True)
+        self.log("val_ssl_loss", ssl_loss, on_epoch=True, on_step=False, prog_bar=True)
+
+
     # collate_fn for tokenizing input
     def collate_fn_batch_encoding(self, batch):
-        images_clip, images_ssl1, images_ssl2, texts = zip(*batch)
+        images_mm, images_ssl1, images_ssl2, texts = zip(*batch)
         text_encodings = self.tokenizer.batch_encode_plus(
                         list(texts),
                         max_length=self.hparams.max_length,
@@ -161,6 +230,6 @@ class BASE_SLIP(BASE):
                         truncation=True,
                         add_special_tokens=True,
                         return_tensors="pt")
-        return images_clip, images_ssl1, images_ssl2, text_encodings
+        return images_mm, images_ssl1, images_ssl2, text_encodings
 
-
+    

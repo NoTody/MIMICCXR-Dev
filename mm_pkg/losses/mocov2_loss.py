@@ -1,10 +1,11 @@
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from ..model_utils.misc_utils import *
+from ..model_utils.misc_utils import gather 
 
 
 def mocov2_loss(query, key, queue, temperature):
+    query, key = gather(query), gather(key)
     # positive logits: Nx1
     pos_logits = torch.einsum("nc,nc->n", [query, key]).unsqueeze(-1) 
     # negative logits: NxK
