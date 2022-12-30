@@ -1,6 +1,6 @@
 from ..methods.base import *
 from ..methods.base import BASE_SSL
-from ..losses.simclr_loss import NT_Xent
+from ..losses.simclr_loss import NT_Xent, SIMCLR_Loss
 
 
 class SIMCLR(BASE_SSL):
@@ -16,8 +16,7 @@ class SIMCLR(BASE_SSL):
         super()._build_model()
 
         # simclr objective        
-        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature_ssl, \
-                                self.hparams.gpus * self.hparams.num_nodes)
+        self.criterion = SIMCLR_Loss(self.hparams.temperature_ssl, self.hparams.gpus * self.hparams.num_nodes)
 
         # simclr projector
         self.simclr_projector = nn.Sequential(

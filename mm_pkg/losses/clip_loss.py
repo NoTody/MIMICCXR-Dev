@@ -2,30 +2,43 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torch.nn.functional as F
-from ..model_utils.misc_utils import gather
+import numpy as np
+from ..model_utils.misc_utils import gather, all_gather, get_rank
 
 
-def cross_entropy(preds, targets, reduction='none'):
-    log_softmax = nn.LogSoftmax(dim=-1)
-    loss = (-targets * log_softmax(preds)).sum(1)
-    if reduction == "none":
+# modified from https://github.com/facebookresearch/SLIP/blob/main/losses.py
+class CLIP_Loss(nn.Module):
+    def __init__(self, temperature):
+        super().__init__()
+        self.temperature = temperature
+        self.labels = None
+        self.last_local_batch_size = None
+
+    def forward(self, image_embed, text_embed):
+        local_batch_size = image_embed.size(0)
+
+        if local_batch_size != self.last_local_batch_size:
+            self.labels = local_batch_size * get_rank() + torch.arange(
+                local_batch_size, device=image_embed.device
+            )
+            self.last_local_batch_size = local_batch_size
+
+        # gather features from all GPUs
+        image_embed_all, text_embed_all = \
+            all_gather(image_embed), all_gather(text_embed)
+
+        # normalized features
+        image_embed = F.normalize(image_embed, dim=-1, p=2)
+        text_embed = F.normalize(text_embed, dim=-1, p=2)
+
+        logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / self.temperature))
+        logit_scale = logit_scale.exp()
+        # cosine similarity as logits
+        logits_per_image = logit_scale * image_embed @ text_embed_all.t() 
+        logits_per_text = logit_scale * text_embed @ image_embed_all.t()
+
+        loss = (F.cross_entropy(logits_per_image, self.labels) + \
+            F.cross_entropy(logits_per_text, self.labels)) / 2
+
         return loss
-    elif reduction == "mean":
-        return loss.mean()
-
-def clip_loss(image_embeddings, text_embeddings, temperature):
-    image_embeddings, text_embeddings = gather(image_embeddings), gather(text_embeddings)
-    # normalize
-    image_embeddings, text_embeddings = F.normalize(image_embeddings, dim=-1), F.normalize(text_embeddings, dim=-1)
-    # compute loss
-    logits = (text_embeddings @ image_embeddings.T) / temperature
-    images_similarity = image_embeddings @ image_embeddings.T
-    texts_similarity = text_embeddings @ text_embeddings.T
-    targets = F.softmax(
-        (images_similarity + texts_similarity) / 2.0 * temperature, dim=-1
-    )
-    texts_loss = cross_entropy(logits, targets, reduction='none')
-    images_loss = cross_entropy(logits.T, targets.T, reduction='none')
-    loss =  (images_loss + texts_loss) / 2.0    # shape: (batch_size)
-    return loss
 

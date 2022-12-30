@@ -23,9 +23,9 @@ class SLIP_MOCOV2(BASE_SLIP):
 
         # mocov2 projectors
         self.mocov2_projector = nn.Sequential(
-            nn.Linear(self.hparams.img_embedding_dim, self.hparams.mocov2_proj_hidden_dim),
+            nn.Linear(self.hparams.img_embedding_dim, self.hparams.img_embedding_dim),
             nn.ReLU(),
-            nn.Linear(self.hparams.mocov2_proj_hidden_dim, self.hparams.mocov2_proj_output_dim),
+            nn.Linear(self.hparams.img_embedding_dim, self.hparams.mocov2_proj_output_dim),
         )
         self.mocov2_projector_ema = deepcopy(self.mocov2_projector) 
         for param in self.mocov2_projector_ema.parameters():
@@ -66,8 +66,6 @@ class SLIP_MOCOV2(BASE_SLIP):
         # original encoder output
         feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         q1, q2 = self.mocov2_projector(feat1), self.mocov2_projector(feat2)
-        # normalize
-        q1, q2 = nn.functional.normalize(q1, dim=1), nn.functional.normalize(q1, dim=1)
 
         with torch.no_grad():
             # shuffle for making use of BN

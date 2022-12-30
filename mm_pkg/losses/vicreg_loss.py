@@ -19,8 +19,6 @@ def variance_loss(z1, z2):
 def covariance_loss(z1, z2):
     N, D = z1.size()
 
-    z1 = z1 - z1.mean(dim=0)
-    z2 = z2 - z2.mean(dim=0)
     cov_z1 = (z1.T @ z1) / (N - 1)
     cov_z2 = (z2.T @ z2) / (N - 1)
 
@@ -31,13 +29,17 @@ def covariance_loss(z1, z2):
 
 def vicreg_loss(z1, z2, invariance_lamb, variance_mu, covairance_v):
     z1, z2 = gather(z1), gather(z2)
-    
+
     invar_loss = invariance_loss(z1, z2)
+
+    # zero mean
+    z1 = z1 - z1.mean(dim=0)
+    z2 = z2 - z2.mean(dim=0)
+ 
     var_loss = variance_loss(z1, z2)
     cov_loss = covariance_loss(z1, z2)
 
     loss = invariance_lamb * invar_loss + variance_mu * var_loss + covairance_v * cov_loss
 
     return loss
-
 

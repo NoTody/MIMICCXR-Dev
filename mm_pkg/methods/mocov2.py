@@ -22,9 +22,9 @@ class MOCOV2(BASE_SSL):
 
         # mocov2 projectors
         self.mocov2_projector = nn.Sequential(
-            nn.Linear(self.hparams.img_embedding_dim, self.hparams.mocov2_proj_hidden_dim),
+            nn.Linear(self.hparams.img_embedding_dim, self.hparams.img_embedding_dim),
             nn.ReLU(),
-            nn.Linear(self.hparams.mocov2_proj_hidden_dim, self.hparams.mocov2_proj_output_dim),
+            nn.Linear(self.hparams.img_embedding_dim, self.hparams.mocov2_proj_output_dim),
         )
         self.mocov2_projector_ema = deepcopy(self.mocov2_projector) 
         for param in self.mocov2_projector_ema.parameters():

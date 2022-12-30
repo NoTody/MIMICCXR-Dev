@@ -13,7 +13,7 @@ from ..model_utils.misc_utils import *
 from ..model_utils.misc_utils import WarmupCosineSchedule
 from ..model_utils.module_utils import *
 from ..model_utils.module_utils import ProjectionHeadCLIP, ProjectionHeadConVIRT
-from ..losses.clip_loss import clip_loss
+from ..losses.clip_loss import CLIP_Loss
 from ..losses.convirt_loss import ConVIRT_Loss
 from ..data_utils.dataloader_utils import MIMIC_CXR_Unsupervised
 
@@ -39,11 +39,29 @@ class BASE(pl.LightningModule):
 
     def _build_model(self):
         self.img_backbone = self.img_backbones[self.hparams.img_backbone]
+        self.img_projector = ProjectionHeadConVIRT(self.hparams.img_embedding_dim, \
+                        self.hparams.projection_dim, self.hparams.dropout)
+
+        if self.hparams.method == "CLIP":
+            self.mm_criterion = CLIP_Loss(self.hparams.temperature_mm)
+        elif self.hparams.method == "ConVIRT":
+            self.mm_criterion = ConVIRT_Loss(self.hparams.batch_size, self.hparams.alpha, self.hparams.temperature_mm, \
+                        self.hparams.gpus * self.hparams.num_nodes)
+        else:
+            pass
 
 
-    # virtual method
     def shared_forward(self, batch, batch_idx):
-        raise NotImplementedError("shared_forward Not Implemented!")
+        images_mm, text_encodings = batch
+        images_mm = torch.stack((images_mm))
+
+        # get embeddings
+        image_features, text_features = self.img_backbone(images_mm), self.text_backbone(text_encodings)
+        image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
+
+        # compute loss
+        loss = self.mm_criterion(image_embeddings, text_embeddings)
+        return {"loss": loss}
 
 
     def training_step(self, batch, batch_idx):
@@ -62,7 +80,11 @@ class BASE(pl.LightningModule):
     def on_after_backward(self):
         # clip gradients
         if self.hparams.clip_grad:
-            clip_gradients(self.backbone, self.hparams.clip_grad)
+            clip_gradients(self.img_backbone, self.hparams.clip_grad)
+        # if multi-modal, clip text encoder
+        matches = ["CLIP", "ConVIRT", "SLIP"]
+        if any(x in self.hparams.method for x in matches):
+            clip_gradients(self.text_backbone, self.hparams.clip_grad)
 
 
     @property
@@ -144,9 +166,15 @@ class BASE_SSL(BASE):
         super().__init__(args)
 
 
+    def on_after_backward(self):
+        # clip gradients
+        if self.hparams.clip_grad:
+            clip_gradients(self.img_backbone, self.hparams.clip_grad)
+
+
     # collate_fn for tokenizing input
     def collate_fn_batch_encoding(self, batch):
-        _, images, images_ssl2, _ = zip(*batch)
+        _, images_ssl1, images_ssl2, _ = zip(*batch)
         return images_ssl1, images_ssl2
 
 
@@ -168,6 +196,7 @@ class BASE_SLIP(BASE):
                             self.hparams.projection_dim, self.hparams.dropout)
             self.text_projector = ProjectionHeadCLIP(self.hparams.text_embedding_dim,
                             self.hparams.projection_dim, self.hparams.dropout)
+            self.criterion = CLIP_Loss(self.hparams.temperature_mm)
         elif self.hparams.multi_modal == "ConVIRT":
             # convirt projector
             self.img_projector = ProjectionHeadConVIRT(self.hparams.img_embedding_dim, \
@@ -193,12 +222,7 @@ class BASE_SLIP(BASE):
         image_embeddings, text_embeddings = self.img_projector(image_features), self.text_projector(text_features)
 
         # compute loss
-        if self.hparams.multi_modal == "CLIP":
-            mm_loss = clip_loss(image_embeddings, text_embeddings, self.hparams.temperature_mm).mean()
-        elif self.hparams.multi_modal == "ConVIRT":
-            mm_loss = self.criterion(image_embeddings, text_embeddings)
-        else:
-            raise NotImplementedError("Multi-Modal Method Not Imeplmented!")
+        mm_loss = self.criterion(image_embeddings, text_embeddings)
 
         return images_ssl1, images_ssl2, mm_loss
 

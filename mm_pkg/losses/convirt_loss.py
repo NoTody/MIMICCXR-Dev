@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torch.nn.functional as F
-from ..model_utils.misc_utils import gather 
+from ..model_utils.misc_utils import gather, all_gather
 
 
 class ConVIRT_Loss(nn.Module):
@@ -28,9 +28,7 @@ class ConVIRT_Loss(nn.Module):
         return loss
 
     def forward(self, z_img, z_text):
-        z_img, z_text = gather(z_img), gather(z_text) 
-        # normalize
-        z_img, z_text = F.normalize(z_img, dim=-1), F.normalize(z_text, dim=-1)
+        z_img, z_text = all_gather(z_img), all_gather(z_text) 
         loss_a, loss_b = self.NT_Xent(z_img, z_text), self.NT_Xent(z_text, z_img)
         return self.alpha * loss_a + (1 - self.alpha) * loss_b
 

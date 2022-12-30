@@ -1,6 +1,6 @@
 from ..methods.base import *
 from ..methods.base import BASE_SLIP
-from ..losses.simclr_loss import NT_Xent
+from ..losses.simclr_loss import SIMCLR_Loss
 
 
 class SLIP_SIMCLR(BASE_SLIP):
@@ -16,8 +16,7 @@ class SLIP_SIMCLR(BASE_SLIP):
         super()._build_model()
         
         # simclr objective
-        self.criterion = NT_Xent(self.hparams.batch_size, self.hparams.temperature_ssl, \
-                        self.hparams.gpus * self.hparams.num_nodes)
+        self.ssl_criterion = SIMCLR_Loss(self.hparams.temperature_ssl, self.hparams.gpus * self.hparams.num_nodes) 
 
         # simclr projector
         self.simclr_projector = nn.Sequential(
@@ -34,7 +33,7 @@ class SLIP_SIMCLR(BASE_SLIP):
         # simclr 
         feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         z1, z2 = self.simclr_projector(feat1), self.simclr_projector(feat2)
-        ssl_loss = self.criterion(z1, z2)
+        ssl_loss = self.ssl_criterion(z1, z2)
 
         # slip final loss
         loss = mm_loss + self.hparams.ssl_scale * ssl_loss

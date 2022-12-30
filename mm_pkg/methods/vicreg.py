@@ -59,7 +59,6 @@ class VICREG(BASE_SSL):
         parser.add_argument("--covariance_v", type=float, default=1.)
         parser.add_argument("--vicreg_proj_output_dim", type=int, default=8192)
         parser.add_argument("--vicreg_proj_hidden_dim", type=int, default=8192)
-        parser.add_argument("--ssl_scale", type=float, default=1.0)
 
         return parent_parser
 
