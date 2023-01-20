@@ -3,7 +3,7 @@ Multi-Modal Self-Supervision Pre-training BenchMarking on training with MIMICCXR
 
 Evaluation Method:
 
-![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/final.pdf?raw=true)
+![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/final.pdf)
 
 # **Example Pretraining command:**
 ```
