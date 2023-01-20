@@ -18,7 +18,7 @@ python main_pretrain.py --batch_size <batch_size> --gpus <num_gpu> --num_nodes <
 
 # **Example finetuning command:**
 
-## [CheXpert]{https://stanfordmlgroup.github.io/competitions/chexpert/}
+## [CheXpert](https://stanfordmlgroup.github.io/competitions/chexpert/)
 
 ```
 python ./chexpert_evaluation/base3.py --model_load_path <saved_model_path> --model_name "resnet50" --batch_size 64 --max_epoch 3 --save_suffix "resnet_slip_simclr" --seed 2022
@@ -32,7 +32,7 @@ python ./chexpert_evaluation/base3.py --model_load_path <saved_model_path> --mod
 ```
 
 
-## [NIH-ChestX-ray 14]{https://nihcc.app.box.com/v/ChestXray-NIHCC}
+## [NIH-ChestX-ray 14](https://nihcc.app.box.com/v/ChestXray-NIHCC)
 
 ```
 python ./chexpert_evaluation/base3.py --model_load_path <saved_model_path> --model_name "resnet50" --batch_size 64 --max_epoch 3 --save_suffix "resnet_slip_simclr" --seed 2022
