@@ -32,7 +32,7 @@ python train_full.py --model_load_path <path_to_weights> --model_name "resnet50"
 ```
 
 
-<Examples on GradCam:
+<Examples on GradCam:>
 
-![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/grad_cam_example.png?raw=true)>
+<![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/grad_cam_example.png?raw=true)>
 
