@@ -2,7 +2,7 @@
 Multi-Modal Self-Supervision Pre-training BenchMarking on training with MIMICCXR and evaluating with CheXpert
 
 Evaluation Method:
-
+xfun::embed_file(https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/final.pdf)
 ![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/final.pdf)
 
 # **Example Pretraining command:**
