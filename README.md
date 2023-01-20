@@ -3,9 +3,9 @@ Multi-Modal Self-Supervision Pre-training BenchMarking on training with MIMICCXR
 
 Evaluation Method:
 
-![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/architecture_example.png?raw=true)
+![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/final.pdf?raw=true)
 
-# **Example pretraining command:**
+# **Example Pretraining command:**
 ```
 python ../main_pretrain.py --batch_size 32 --gpus 4 --num_nodes 1 --max_epochs 25 --lr_backbone 1e-4 --lr_projector 1e-4 --im    g_backbone "vit2d_b16" --max_length 128 --features_dim 768 --img_embedding_dim 768 --weight_decay 0.1 --optimizer "adamw" --method "SLIP_SIMCLR" --save_dir "slip_saved" --two_transform --pretrained --seed 2022
 ```
@@ -30,9 +30,3 @@ python base3.py --model_load_path <path_to_weights> --batch_size 64 --max_epoch 
 ```
 python train_full.py --model_load_path <path_to_weights> --model_name "resnet50" --batch_size 16 --max_epoch 30 --save_suffix <suffix> --seed 5 --train_percent 0.1 --method "FT" --num_class 14
 ```
-
-
-<Examples on GradCam:>
-
-<![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/grad_cam_example.png?raw=true)>
-
