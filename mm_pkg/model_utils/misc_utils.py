@@ -283,3 +283,19 @@ class LARS(torch.optim.Optimizer):
                 p.add_(mu, alpha=-g["lr"])
 
 
+def calc_kd_loss(z_student, z_teacher, kd_temp):
+    T = kd_temp
+    student_out = F.log_softmax(z_student / T, dim=1)
+    teacher_out = F.softmax(z_teacher / T, dim=1)
+    kd_loss = F.kl_div(student_out, teacher_out) * T * T
+    return kd_loss
+
+
+def soft_cross_entropy(student_logit, teacher_logit):
+    '''
+    :param student_logit: logit of the student arch (without softmax norm)
+    :param teacher_logit: logit of the teacher arch (already softmax norm)
+    :return: CE loss value.
+    '''
+    return -(teacher_logit * torch.nn.functional.log_softmax(student_logit, 1)).sum()/student_logit.shape[0]
+

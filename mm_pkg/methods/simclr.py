@@ -1,6 +1,6 @@
 from ..methods.base import *
 from ..methods.base import BASE_SSL
-from ..losses.simclr_loss import NT_Xent, SIMCLR_Loss
+from ..losses.simclr_loss import SIMCLR_Loss
 
 
 class SIMCLR(BASE_SSL):
@@ -16,7 +16,8 @@ class SIMCLR(BASE_SSL):
         super()._build_model()
 
         # simclr objective        
-        self.criterion = SIMCLR_Loss(self.hparams.temperature_ssl, self.hparams.gpus * self.hparams.num_nodes)
+        self.criterion = SIMCLR_Loss(self.hparams.batch_size, self.hparams.temperature_ssl, \
+                        self.hparams.gpus * self.hparams.num_nodes)
 
         # simclr projector
         self.simclr_projector = nn.Sequential(
@@ -42,10 +43,9 @@ class SIMCLR(BASE_SSL):
 
     @property
     def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "projector", "params": self.simclr_projector.parameters()},
-        ]
+        extra_learnable_params = [{"type": "projector", "params": self.simclr_projector.parameters(), \
+                                "lr": self.hparams.lr_img_backbone}]
+        return super().learnable_params + extra_learnable_params
 
 
     @staticmethod

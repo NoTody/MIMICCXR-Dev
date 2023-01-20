@@ -33,8 +33,7 @@ def vicreg_loss(z1, z2, invariance_lamb, variance_mu, covairance_v):
     invar_loss = invariance_loss(z1, z2)
 
     # zero mean
-    z1 = z1 - z1.mean(dim=0)
-    z2 = z2 - z2.mean(dim=0)
+    z1, z2 = z1 - z1.mean(dim=0), z2 - z2.mean(dim=0)
  
     var_loss = variance_loss(z1, z2)
     cov_loss = covariance_loss(z1, z2)

@@ -19,16 +19,6 @@ class CLIP(BASE):
         self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.text_backbone, use_fast=True)
 
 
-    @property
-    def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "backbone", "params": self.text_backbone.parameters()},
-            {"type": "projector", "params": self.img_projector.parameters()},
-            {"type": "projector", "params": self.text_projector.parameters()},
-        ]
-
-
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("clip")

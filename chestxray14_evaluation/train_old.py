@@ -136,7 +136,7 @@ def main(args):
     # initialize the ground truth and output tensor
     pred = torch.FloatTensor()
     pred = pred.cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
     criterion = torch.nn.BCELoss()
     best_loss = 1e5
     for epoch in range(N_EPOCHS):
@@ -168,7 +168,7 @@ def main(args):
         print("Validation loss: {:.3f},".format(val_losses))
         if best_loss > val_losses:
             best_loss = val_losses
-            best_model = model
+            best_model = copy.deepcopy(model)
             torch.save({'state_dict': model.state_dict(), 
                         'best_loss': best_loss, 'optimizer' : optimizer.state_dict()}, 
                         'model_saved/' + args.save_suffix + '.pth.tar')
@@ -181,7 +181,7 @@ def main(args):
     print("Testing ...")
     gt = torch.FloatTensor()
     gt = gt.cuda()
-    model = best_model
+    model = copy.deepcopy(best_model)
     model.eval()
     with torch.no_grad():
         for i, (inp, target) in enumerate(Bar(test_loader)):
@@ -311,5 +311,3 @@ if __name__ == '__main__':
         random.seed(random_seed)
 
     main(args)
-
-

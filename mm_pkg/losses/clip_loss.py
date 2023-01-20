@@ -28,8 +28,9 @@ class CLIP_Loss(nn.Module):
             all_gather(image_embed), all_gather(text_embed)
 
         # normalized features
-        image_embed = F.normalize(image_embed, dim=-1, p=2)
-        text_embed = F.normalize(text_embed, dim=-1, p=2)
+        image_embed, text_embed = image_embed - image_embed.mean(dim=0), text_embed - text_embed.mean(dim=0)
+        #image_embed = F.normalize(image_embed, dim=-1, p=2)
+        #text_embed = F.normalize(text_embed, dim=-1, p=2)
 
         logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / self.temperature))
         logit_scale = logit_scale.exp()

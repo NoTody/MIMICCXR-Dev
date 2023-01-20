@@ -463,11 +463,36 @@ class TrainTransform(object):
             ),
         ])
 
+        # multi-modal transform (based on original ConVIRT augmentations)
+        self.transform_mm_p = transforms.Compose([
+            transforms.RandomResizedCrop(
+                224, scale=(0.6, 1.0), interpolation=InterpolationMode.BICUBIC
+            ),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomAffine((-20, 20), translate=(0.09, 0.10), scale=(0.95, 1.05)),
+            transforms.RandomApply(
+                [
+                    transforms.ColorJitter(
+                        brightness=(0.6, 1.4), contrast=(0.6, 1.4), saturation=0, hue=0,
+                    )
+                ],
+                p=0.5,
+            ),
+            GaussianBlur(p=0.1, sigma_min=0.1, sigma_max=3.0),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+            ),
+        ])
+
+
     def __call__(self, sample):
         xi = self.transform_mm(sample)
+        #xi = self.transform_ssl_2(sample)
 
         if self.ssl_transform:
             x1 = self.transform_ssl_1(sample)
+            #x1 = self.transform_mm_p(sample)
             x2 = self.transform_ssl_2(sample)
             return xi, x1, x2
         else:

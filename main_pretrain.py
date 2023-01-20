@@ -66,6 +66,11 @@ def parse_args_pretrain():
     # multi-modal method for SLIP. used when SLIP is called
     parser.add_argument("--multi_modal", choices=["CLIP", "ConVIRT", "None"], type=str, default="None")
 
+    # knowledge distillation
+    parser.add_argument("--kd_temperature", type=float, default=10.0)
+    parser.add_argument("--kd_scale", type=float, default=0.95)
+    parser.add_argument("--teacher_load_path", type=str, default="None")
+
     # image model
     parser.add_argument("--img_backbone", choices=IMG_BACKBONES, type=str, default="resnet2d_50")
     parser.add_argument("--ssl_transform", default=False, action='store_true')
@@ -93,12 +98,14 @@ def parse_args_pretrain():
     # learning rate setup
     parser.add_argument("--lr_backbone", type=float, default=1e-4)
     parser.add_argument("--lr_projector", type=float, default=1e-4)
+    parser.add_argument("--lr_img_backbone", type=float, default=2e-2)
+    parser.add_argument("--lr_text_backbone", type=float, default=2e-4)
     #parser.add_argument("--lr_predictor", type=float, default=1e-4)
     parser.add_argument("--min_lr_backbone", type=float, default=1e-5)
     parser.add_argument("--min_lr_projector", type=float, default=1e-5)
 
     # weight decay setup
-    parser.add_argument("--weight_decay", type=float, default=1e-4) # 1e-4
+    parser.add_argument("--weight_decay", type=float, default=5e-4) # 1e-4
     parser.add_argument("--weight_decay_end", type=float, default=1e-5)
 
     # momentum setup
@@ -110,6 +117,7 @@ def parse_args_pretrain():
     # misc
     parser.add_argument("--per_warmup_steps", type=float, default=0.03)
     parser.add_argument("--optimizer",  choices=['adamw', 'lamb', 'sgd', 'lars'], type=str, default="adamw")
+    parser.add_argument("--scheduler",  choices=['cosine', 'step'], type=str, default="cosine")
 
     # dataset args
     parser.add_argument("--train_df_path", type=str, default= '/gpfs/data/denizlab/Users/hh2740/mimic-cxr_full_train.csv')

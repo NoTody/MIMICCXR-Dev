@@ -144,4 +144,4 @@ dmypy.json
 /submitit
 **/submitit.bsub
 **/*.txt
-
+**/results_*

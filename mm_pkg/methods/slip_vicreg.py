@@ -1,7 +1,6 @@
 import argparse
 from ..methods.base import *
 from ..methods.base import BASE_SLIP
-from ..losses.clip_loss import clip_loss
 from ..losses.vicreg_loss import vicreg_loss
 
 
@@ -30,13 +29,18 @@ class SLIP_VICREG(BASE_SLIP):
 
 
     def shared_forward(self, batch, batch_idx):
-        images_ssl1, images_ssl2, mm_loss = super().shared_forward(batch, batch_idx)
+        img_feat1, img_feat2, img_feat_mm, mm_loss = super().shared_forward(batch, batch_idx)
 
         # vicreg
-        feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
-        z1, z2 = self.vicreg_projector(feat1), self.vicreg_projector(feat2)
+        z1, z2, z_mm = self.vicreg_projector(img_feat1), self.vicreg_projector(img_feat2), self.vicreg_projector(img_feat_mm)
         ssl_loss = vicreg_loss(z1, z2, invariance_lamb=self.hparams.invariance_lamb, 
+                variance_mu=self.hparams.variance_mu, covairance_v=self.hparams.covariance_v) + \
+                    vicreg_loss(z1, z_mm, invariance_lamb=self.hparams.invariance_lamb, 
+                variance_mu=self.hparams.variance_mu, covairance_v=self.hparams.covariance_v) + \
+                    vicreg_loss(z2, z_mm, invariance_lamb=self.hparams.invariance_lamb, 
                 variance_mu=self.hparams.variance_mu, covairance_v=self.hparams.covariance_v)
+        ssl_loss /= 3
+
 
         # slip final loss
         loss = mm_loss + self.hparams.ssl_scale * ssl_loss
@@ -45,13 +49,9 @@ class SLIP_VICREG(BASE_SLIP):
 
     @property
     def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "backbone", "params": self.text_backbone.parameters()},
-            {"type": "projector", "params": self.img_projector.parameters()},
-            {"type": "projector", "params": self.text_projector.parameters()},
-            {"type": "projector", "params": self.vicreg_projector.parameters()},
-        ]
+        extra_learnable_params = [{"type": "projector", "params": self.vicreg_projector.parameters(), \
+                                "lr": self.hparams.lr_img_backbone}]
+        return super().learnable_params + extra_learnable_params
 
 
     @staticmethod

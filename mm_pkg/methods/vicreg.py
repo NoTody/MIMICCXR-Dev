@@ -43,10 +43,9 @@ class VICREG(BASE_SSL):
 
     @property
     def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "projector", "params": self.vicreg_projector.parameters()},
-        ]
+        extra_learnable_params = [{"type": "projector", "params": self.vicreg_projector.parameters(), 
+                                "lr": self.hparams.lr_img_backbone}]
+        return super().learnable_params + extra_learnable_params
 
 
     @staticmethod

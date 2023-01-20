@@ -28,7 +28,8 @@ class ConVIRT_Loss(nn.Module):
         return loss
 
     def forward(self, z_img, z_text):
-        z_img, z_text = all_gather(z_img), all_gather(z_text) 
+        z_img, z_text = all_gather(z_img), all_gather(z_text)
+        #z_img, z_text = z_img - z_img.mean(dim=0), z_text - z_text.mean(dim=0)
         loss_a, loss_b = self.NT_Xent(z_img, z_text), self.NT_Xent(z_text, z_img)
         return self.alpha * loss_a + (1 - self.alpha) * loss_b
 

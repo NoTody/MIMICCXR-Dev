@@ -5,50 +5,35 @@ from ..model_utils.misc_utils import gather, get_rank
 
 
 class SIMCLR_Loss(nn.Module):
-    """
-    This is the SimCLR loss in https://arxiv.org/abs/2002.05709
-    The embedding vectors are assumed to have size (2 x batch_size, embedding_dim) and
-    the memory layout that can be reshaped into shape (2, batch_size, embedding_dim).
-    This memory layout is consistent with the SimCLR collator in
-    https://github.com/facebookresearch/vissl/blob/master/vissl/data/collators/simclr_collator.py
-    Config params:
-        temperature (float): the temperature to be applied on the logits
-    """
 
-    def __init__(self, temperature=0.1, world_size=1):
+    def __init__(self, batch_size, temperature=0.1, world_size=1):
         super().__init__()
         self.tau = temperature
-        self.world_size = world_size
-        self.labels = None
-        self.masks = None
-        self.last_local_batch_size = None
+        self.all_batch_size = batch_size * world_size
+        self.mask = (~torch.eye(self.all_batch_size * 2, self.all_batch_size * 2, dtype=bool)).float()
+        self.similarity_f = nn.CosineSimilarity(dim=2)
 
-    def forward(self, q_a, q_b):
-        local_batch_size = q_a.size(0)
+    def forward(self, z_i, z_j):
+        k_i, k_j = gather(z_i), gather(z_j)
+        # nomralize
+        k_i = F.normalize(k_i, dim=-1, p=2)
+        k_j = F.normalize(k_j, dim=-1, p=2)
 
-        q_a = F.normalize(q_a, dim=-1, p=2)
-        q_b = F.normalize(q_b, dim=-1, p=2)
+        # calculate similarity matrix for two views
+        k_cat = torch.cat([k_i, k_j], dim=0)
+        similarity_matrix = self.similarity_f(k_cat.unsqueeze(1), k_cat.unsqueeze(0))
 
-        k_a, k_b = gather(q_a), gather(q_b)
+        # get positive pairs
+        sim_ij = torch.diag(similarity_matrix, self.all_batch_size)
+        sim_ji = torch.diag(similarity_matrix, -self.all_batch_size)
+        positives = torch.cat([sim_ij, sim_ji], dim=0)
 
-        if local_batch_size != self.last_local_batch_size:
-            self.labels = local_batch_size * get_rank() + torch.arange(
-                local_batch_size, device=q_a.device
-            )
-            total_batch_size = local_batch_size * self.world_size
-            self.masks = F.one_hot(self.labels, total_batch_size) * 1e9
-            self.last_local_batch_size = local_batch_size
+        nominator = torch.exp(positives / self.tau)
+        denominator = self.mask.to(similarity_matrix.device) * torch.exp(similarity_matrix / self.tau)
+        
+        all_losses = -torch.log(nominator / torch.sum(denominator, dim=1))
 
-        logits_aa = torch.matmul(q_a, k_a.transpose(0, 1)) / self.tau
-        logits_aa = logits_aa - self.masks
-        logits_bb = torch.matmul(q_b, k_b.transpose(0, 1)) / self.tau
-        logits_bb = logits_bb - self.masks
-        logits_ab = torch.matmul(q_a, k_b.transpose(0, 1)) / self.tau
-        logits_ba = torch.matmul(q_b, k_a.transpose(0, 1)) / self.tau
-
-        loss_a = F.cross_entropy(torch.cat([logits_ab, logits_aa], dim=1), self.labels)
-        loss_b = F.cross_entropy(torch.cat([logits_ba, logits_bb], dim=1), self.labels)
-        loss = (loss_a + loss_b) / 2  # divide by 2 to average over all samples
+        loss = torch.sum(all_losses) / (2 * self.all_batch_size)
 
         return loss
 

@@ -15,7 +15,8 @@ class MOCOV2(BASE_SSL):
 
     def _build_model(self):
         super()._build_model()
-        # ema backbones
+        
+        # ema model
         self.img_backbone_ema = deepcopy(self.img_backbone)
         for param in self.img_backbone_ema.parameters():
             param.requires_grad = False
@@ -56,8 +57,7 @@ class MOCOV2(BASE_SSL):
 
     def shared_forward(self, batch, batch_idx):
         images_ssl1, images_ssl2 = batch
-        # only use first image for clip
-        images_ssl1, images_ssl2 = torch.stack((images_ssl1)), torch.stack((images_ssl2))
+        images_ssl1, images_ssl2 = torch.stack((images_ssl1)), torch.stack((images_ssl2)) 
 
         # mocov2
         # ema update
@@ -67,8 +67,6 @@ class MOCOV2(BASE_SSL):
         # original encoder output
         feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
         q1, q2 = self.mocov2_projector(feat1), self.mocov2_projector(feat2)
-        # normalize
-        q1, q2 = nn.functional.normalize(q1, dim=-1), nn.functional.normalize(q1, dim=-1)
 
         with torch.no_grad():
             # shuffle for making use of BN
@@ -84,7 +82,7 @@ class MOCOV2(BASE_SSL):
 
         # loss
         queue = self.queue.clone().detach()
-        ssl_loss = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature_ssl) 
+        ssl_loss = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature_ssl)
                 + mocov2_loss(q2, k1, queue[0], self.hparams.temperature_ssl)) / 2
 
         # update queue
@@ -96,10 +94,9 @@ class MOCOV2(BASE_SSL):
 
     @property
     def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "projector", "params": self.mocov2_projector.parameters()},
-        ]
+        extra_learnable_params = [{"type": "projector", "params": self.mocov2_projector.parameters(), \
+                                "lr": self.hparams.lr_img_backbone}]
+        return super().learnable_params + extra_learnable_params
 
 
     @staticmethod
@@ -108,8 +105,7 @@ class MOCOV2(BASE_SSL):
 
         # mocov2 hyper-parameters
         parser.add_argument("--ema_decay", type=float, default=0.999)
-
-        # queue
+        # queue size
         parser.add_argument("--queue_size", type=int, default=65536)
 
         # mocov2 projector
@@ -117,5 +113,4 @@ class MOCOV2(BASE_SSL):
         parser.add_argument("--mocov2_proj_output_dim", type=int, default=128)
 
         return parent_parser
-
 

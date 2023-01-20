@@ -32,7 +32,7 @@ class SLIP_MOCOV2(BASE_SLIP):
             param.requires_grad = False
        
         # create_queue 
-        self.register_buffer("queue", torch.randn(2, self.hparams.mocov2_proj_output_dim, self.hparams.queue_size))
+        self.register_buffer("queue", torch.randn(3, self.hparams.mocov2_proj_output_dim, self.hparams.queue_size))
         self.queue = nn.functional.normalize(self.queue, dim=0)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
@@ -56,36 +56,44 @@ class SLIP_MOCOV2(BASE_SLIP):
 
 
     def shared_forward(self, batch, batch_idx):
-        images_ssl1, images_ssl2, mm_loss = super().shared_forward(batch, batch_idx)
+        feats, images, mm_loss = super().shared_forward(batch, batch_idx)
 
+        feat1, feat2, feat_mm = feats
+        images_ssl1, images_ssl2, images_mm = images
         # mocov2
         # ema update
         ema(self.img_backbone, self.img_backbone_ema, self.hparams.ema_decay)
         ema(self.mocov2_projector, self.mocov2_projector_ema, self.hparams.ema_decay)
 
         # original encoder output
-        feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
-        q1, q2 = self.mocov2_projector(feat1), self.mocov2_projector(feat2)
+        q1, q2, q_mm = self.mocov2_projector(feat1), self.mocov2_projector(feat2), self.mocov2_projector(feat_mm)
 
         with torch.no_grad():
             # shuffle for making use of BN
             images1_k, idx_unshuffle1 = _batch_shuffle_ddp(images_ssl1)
             images2_k, idx_unshuffle2 = _batch_shuffle_ddp(images_ssl2)
+            images_mm_k, idx_unshuffle3 = _batch_shuffle_ddp(images_mm)
             # ema encoder output
-            feat1_ema, feat2_ema = self.img_backbone_ema(images1_k), self.img_backbone_ema(images2_k)
-            k1, k2 = self.mocov2_projector_ema(feat1_ema), self.mocov2_projector_ema(feat2_ema)
+            feat1_ema, feat2_ema, feat_mm_ema = self.img_backbone_ema(images1_k), self.img_backbone_ema(images2_k), self.img_backbone_ema(images_mm_k)
+            k1, k2, k_mm = self.mocov2_projector_ema(feat1_ema), self.mocov2_projector_ema(feat2_ema), self.mocov2_projector_ema(feat_mm_ema)
             # normalize
-            k1, k2 = nn.functional.normalize(k1, dim=1), nn.functional.normalize(k2, dim=1)
+            k1, k2, k_mm = nn.functional.normalize(k1, dim=1), nn.functional.normalize(k2, dim=1), nn.functional.normalize(k_mm, dim=1)
             # undo shuffle
-            k1, k2 = _batch_unshuffle_ddp(k1, idx_unshuffle1), _batch_unshuffle_ddp(k2, idx_unshuffle2)
+            k1, k2, k_mm = _batch_unshuffle_ddp(k1, idx_unshuffle1), _batch_unshuffle_ddp(k2, idx_unshuffle2), _batch_unshuffle_ddp(k_mm, idx_unshuffle3)
 
         # loss
         queue = self.queue.clone().detach()
-        ssl_loss = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature_ssl)
+        ssl_loss1 = (mocov2_loss(q1, k2, queue[1], self.hparams.temperature_ssl)
                 + mocov2_loss(q2, k1, queue[0], self.hparams.temperature_ssl)) / 2
+        ssl_loss2 = (mocov2_loss(q1, k_mm, queue[2], self.hparams.temperature_ssl)
+                + mocov2_loss(q_mm, k1, queue[0], self.hparams.temperature_ssl)) / 2
+        ssl_loss3 = (mocov2_loss(q2, k_mm, queue[2], self.hparams.temperature_ssl)
+                + mocov2_loss(q_mm, k2, queue[1], self.hparams.temperature_ssl)) / 2
+        ssl_loss = (ssl_loss1 + ssl_loss2 + ssl_loss3) / 3
+        
 
         # update queue
-        keys = torch.stack((gather(k1), gather(k2)))
+        keys = torch.stack((gather(k1), gather(k2), gather(k_mm)))
         self._dequeue_and_enqueue(keys)
 
         # slip final loss
@@ -95,13 +103,9 @@ class SLIP_MOCOV2(BASE_SLIP):
 
     @property
     def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "backbone", "params": self.text_backbone.parameters()},
-            {"type": "projector", "params": self.img_projector.parameters()},
-            {"type": "projector", "params": self.text_projector.parameters()},
-            {"type": "projector", "params": self.mocov2_projector.parameters()},
-        ]
+        extra_learnable_params = [{"type": "projector", "params": self.mocov2_projector.parameters(), \
+                                "lr": self.hparams.lr_img_backbone}]
+        return super().learnable_params + extra_learnable_params
 
 
     @staticmethod

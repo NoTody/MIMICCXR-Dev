@@ -60,6 +60,8 @@ def get_args():
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--max_epoch", type=int, default=5)
     parser.add_argument("--train_percent", type=float, default=1.0)
+    parser.add_argument("--kd_temp", type=float, default=5.0)
+    parser.add_argument("--kd_scale", type=float, default=1.0)
     args = parser.parse_args()
     return args
 

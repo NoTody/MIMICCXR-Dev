@@ -16,7 +16,8 @@ class SLIP_SIMCLR(BASE_SLIP):
         super()._build_model()
         
         # simclr objective
-        self.ssl_criterion = SIMCLR_Loss(self.hparams.temperature_ssl, self.hparams.gpus * self.hparams.num_nodes) 
+        self.ssl_criterion = SIMCLR_Loss(self.hparams.batch_size, self.hparams.temperature_ssl, \
+                            self.hparams.gpus * self.hparams.num_nodes) 
 
         # simclr projector
         self.simclr_projector = nn.Sequential(
@@ -28,12 +29,14 @@ class SLIP_SIMCLR(BASE_SLIP):
 
 
     def shared_forward(self, batch, batch_idx):
-        images_ssl1, images_ssl2, mm_loss = super().shared_forward(batch, batch_idx)
+        feats, _, mm_loss = super().shared_forward(batch, batch_idx)
+
+        img_feat1, img_feat2, img_feat_mm = feats
+        #images_ssl1, images_ssl2, images_mm = images
 
         # simclr 
-        feat1, feat2 = self.img_backbone(images_ssl1), self.img_backbone(images_ssl2)
-        z1, z2 = self.simclr_projector(feat1), self.simclr_projector(feat2)
-        ssl_loss = self.ssl_criterion(z1, z2)
+        z1, z2, z_mm = self.simclr_projector(img_feat1), self.simclr_projector(img_feat2), self.simclr_projector(img_feat_mm)
+        ssl_loss = (self.ssl_criterion(z1, z2) + self.ssl_criterion(z1, z_mm) + self.ssl_criterion(z2, z_mm)) / 3
 
         # slip final loss
         loss = mm_loss + self.hparams.ssl_scale * ssl_loss
@@ -41,13 +44,9 @@ class SLIP_SIMCLR(BASE_SLIP):
 
     @property
     def learnable_params(self):
-        return [
-            {"type": "backbone", "params": self.img_backbone.parameters()},
-            {"type": "backbone", "params": self.text_backbone.parameters()},
-            {"type": "projector", "params": self.img_projector.parameters()},
-            {"type": "projector", "params": self.text_projector.parameters()},
-            {"type": "projector", "params": self.simclr_projector.parameters()},
-        ]
+        extra_learnable_params = [{"type": "projector", "params": self.simclr_projector.parameters(), \
+                                "lr": self.hparams.lr_img_backbone}]
+        return super().learnable_params + extra_learnable_params
 
 
     @staticmethod

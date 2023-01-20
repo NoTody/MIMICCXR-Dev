@@ -7,7 +7,8 @@ from ..methods.mocov2 import MOCOV2
 from ..methods.slip_vicreg import SLIP_VICREG
 from ..methods.slip_simclr import SLIP_SIMCLR
 from ..methods.slip_mocov2 import SLIP_MOCOV2
-
+from ..methods.distill_simclr import DISTILL_SIMCLR
+from ..methods.seed_simclr import SEED_SIMCLR
 
 METHODS = {
     # methods
@@ -19,7 +20,9 @@ METHODS = {
     "SLIP_MOCOV2": SLIP_MOCOV2,
     "VICREG": VICREG,
     "SIMCLR": SIMCLR,
-    "MOCOV2": MOCOV2
+    "MOCOV2": MOCOV2,
+    "DISTILL_SIMCLR": DISTILL_SIMCLR,
+    "SEED_SIMCLR": SEED_SIMCLR,
 }
 __all__ = [
     "BASE",
@@ -31,5 +34,7 @@ __all__ = [
     "VICREG",
     "SIMCLR",
     "MOCOV2",
+    "DISTILL_SIMCLR",
+    "SEED_SIMCLR",
 ]
 
