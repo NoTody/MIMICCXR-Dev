@@ -21,28 +21,14 @@ python main_pretrain.py --batch_size <batch_size> --gpus <num_gpu> --num_nodes <
 ## [CheXpert](https://stanfordmlgroup.github.io/competitions/chexpert/)
 
 ```
-python ./chexpert_evaluation/base3.py --model_load_path <saved_model_path> --model_name "resnet50" --batch_size 64 --max_epoch 3 --save_suffix "resnet_slip_simclr" --seed 2022
-```
-
-or
-
-```
-python ./chexpert_evaluation/base3.py --model_load_path <saved_model_path> --model_name <model_name> --batch_size <batch_size> --max_epoch <num_epochs> --save_suffix <saved_model_suffix> --seed 2022
-
+python base3.py --model_load_path <path_to_weights> --batch_size 64 --max_epoch 5 --save_suffix <suffix> --seed 5 --train_percent 0.01
 ```
 
 
 ## [NIH-ChestX-ray 14](https://nihcc.app.box.com/v/ChestXray-NIHCC)
 
 ```
-python ./chexpert_evaluation/base3.py --model_load_path <saved_model_path> --model_name "resnet50" --batch_size 64 --max_epoch 3 --save_suffix "resnet_slip_simclr" --seed 2022
-```
-
-or
-
-```
-python ./chexpert_evaluation/base3.py --model_load_path <saved_model_path> --model_name <model_name> --batch_size <batch_size> --max_epoch <num_epochs> --save_suffix <saved_model_suffix> --seed 2022
-
+python train_full.py --model_load_path <path_to_weights> --model_name "resnet50" --batch_size 16 --max_epoch 30 --save_suffix <suffix> --seed 5 --train_percent 0.1 --method "FT" --num_class 14
 ```
 
 
