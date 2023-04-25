@@ -1,9 +1,6 @@
 # MIMICXR-Dev
 Some Attempts on Learning Good Representation from MIMIC-CXR Dataset (Under Dev)
 
-Pipeline:
-![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/final.png)
-
 # **Example Pretraining command:**
 ```
 python ../main_pretrain.py --batch_size 32 --gpus 4 --num_nodes 1 --max_epochs 25 --lr_backbone 1e-4 --lr_projector 1e-4 --im    g_backbone "vit2d_b16" --max_length 128 --features_dim 768 --img_embedding_dim 768 --weight_decay 0.1 --optimizer "adamw" --method "SLIP_SIMCLR" --save_dir "slip_saved" --two_transform --pretrained --seed 2022
