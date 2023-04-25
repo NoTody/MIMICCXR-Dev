@@ -1,5 +1,5 @@
-# MIMICXR-MutliModal-SelfSupervision
-Multi-Modal Self-Supervision Pre-training BenchMarking on training with MIMICCXR and evaluating with CheXpert
+# MIMICXR-Dev
+Some Attempts on Learning Good Representation from MIMIC-CXR Dataset (Under Dev)
 
 Pipeline:
 ![alt text](https://github.com/NoTody/MIMICCXR-MutliModal-SelfSupervision/blob/main/imgs/final.png)
